@@ -114,6 +114,44 @@ def compute_rr_intervals(beat_times: np.ndarray) -> np.ndarray:
     return np.diff(bt)
 
 
+def compute_per_beat_rr_features(beat_times: np.ndarray) -> pd.DataFrame:
+    """Calcula features RR locales por latido.
+
+    Para cada latido devuelve:
+        * ``rr_prev``: intervalo (segundos) al latido anterior. NaN para el primero.
+        * ``rr_next``: intervalo al latido siguiente. NaN para el último.
+        * ``rr_mean_local``: promedio de ``rr_prev`` y ``rr_next``, ignorando NaN.
+        * ``rr_ratio``: ``rr_prev / rr_next``. NaN si alguno es NaN o cero.
+
+    El DataFrame devuelto tiene un índice posicional 0..n-1 y se alinea con
+    el orden de ``beat_times``. El llamador es responsable de pasar los
+    latidos ordenados temporalmente.
+    """
+    bt = np.asarray(beat_times, dtype=float).ravel()
+    n = bt.size
+    rr_prev = np.full(n, np.nan)
+    rr_next = np.full(n, np.nan)
+    if n >= 2:
+        diffs = np.diff(bt)
+        rr_prev[1:] = diffs
+        rr_next[:-1] = diffs
+
+    stacked = np.vstack([rr_prev, rr_next])
+    with np.errstate(invalid="ignore"):
+        rr_mean_local = np.nanmean(stacked, axis=0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rr_ratio = rr_prev / np.where(rr_next == 0, np.nan, rr_next)
+
+    return pd.DataFrame(
+        {
+            "rr_prev": rr_prev,
+            "rr_next": rr_next,
+            "rr_mean_local": rr_mean_local,
+            "rr_ratio": rr_ratio,
+        }
+    )
+
+
 def compute_rr_features(beat_times: np.ndarray) -> dict[str, float]:
     """Calcula features clásicas sobre intervalos RR.
 
