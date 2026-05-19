@@ -43,7 +43,12 @@ CASE_ID_COLUMN: str = "case_id"
 TARGET_COLUMN: str = "rhythm_label"
 BEAT_TYPE_COLUMN: str = "beat_type"          # uso descriptivo únicamente
 SIGNAL_QUALITY_COLUMN: str = "bad_signal_quality"
-BEAT_TIME_COLUMN: str = "beat_time"          # tiempo del latido (en segundos)
+BEAT_TIME_COLUMN: str = "time_second"        # nombre real en los CSV de PhysioNet
+
+# Patrón del nombre de los archivos de anotación. El paquete oficial usa
+# `Annotation_file_<case_id>.csv` (singular). Se admite también la variante
+# plural por robustez ante posibles renombrados.
+ANNOTATION_FILENAME_REGEX: str = r"^Annotations?_file_(\d+)\.csv$"
 
 # Etiquetas y categorías a excluir
 EXCLUDED_RHYTHM_LABELS: tuple[str, ...] = ("Noise",)

@@ -16,7 +16,7 @@ def _synthetic_signal(seconds: float = 10.0, fs_hz: int = 500) -> np.ndarray:
 
 
 def _beats_df(times, labels=None):
-    df = pd.DataFrame({"beat_time": times})
+    df = pd.DataFrame({"time_second": times})
     if labels is not None:
         df["rhythm_label"] = labels
     return df
