@@ -1,0 +1,22 @@
+name: vitaldb-arrhythmia-ml
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pandas
+  - numpy
+  - matplotlib
+  - seaborn
+  - scikit-learn
+  - scipy
+  - tqdm
+  - jupyter
+  - ipykernel
+  - joblib
+  - pytest
+  - pip:
+      - vitaldb
+      - xgboost
+      - imbalanced-learn

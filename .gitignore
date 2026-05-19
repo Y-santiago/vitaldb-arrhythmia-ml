@@ -1,0 +1,155 @@
+# ============================================================================
+# Python
+# ============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ============================================================================
+# Virtual environments
+# ============================================================================
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+.conda/
+conda-meta/
+
+# ============================================================================
+# Jupyter
+# ============================================================================
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+profile_default/
+ipython_config.py
+*.nbconvert.ipynb
+
+# ============================================================================
+# Datos crudos, intermedios y procesados (NUNCA subir al repositorio).
+# Se ignora el contenido pero se conservan los `.gitkeep` para preservar la
+# estructura del repositorio.
+# ============================================================================
+data/raw/*
+data/interim/*
+data/processed/*
+
+# Mantener subcarpetas vacías de data/raw/
+!data/raw/physionet_annotations/
+!data/raw/vitaldb_waveforms/
+data/raw/physionet_annotations/*
+data/raw/vitaldb_waveforms/*
+!data/raw/physionet_annotations/.gitkeep
+!data/raw/vitaldb_waveforms/.gitkeep
+
+# Mantener .gitkeep en data/raw, data/interim y data/processed
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+
+# ============================================================================
+# Archivos de datos pesados (en cualquier ubicación)
+# ============================================================================
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.mat
+*.arrow
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.rar
+
+# ============================================================================
+# Modelos entrenados
+# ============================================================================
+models/*
+!models/.gitkeep
+*.joblib
+*.pt
+*.pth
+*.onnx
+*.bin
+*.pb
+*.ckpt
+*.safetensors
+
+# ============================================================================
+# Reportes generados automáticamente
+# ============================================================================
+reports/figures/*
+reports/tables/*
+!reports/figures/.gitkeep
+!reports/tables/.gitkeep
+
+# ============================================================================
+# Sistema operativo
+# ============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ============================================================================
+# Editores e IDEs
+# ============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.spyproject/
+.spyderworkspace
+.history/
+
+# ============================================================================
+# Logs y temporales
+# ============================================================================
+*.log
+*.tmp
+*.bak
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.tox/
+.nox/
