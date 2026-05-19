@@ -1,15 +1,18 @@
 """Pipelines baseline y validación por grupos.
 
-Regla metodológica clave: la separación train/test debe hacerse **por
-`case_id`**, nunca por ventana ni por latido aleatorio. El módulo expone:
+Reglas metodológicas codificadas aquí:
+    * Split train/test **por `case_id`** (`GroupKFold` / `GroupShuffleSplit`).
+    * `beat_type` y otras columnas listadas en
+      :data:`config.FORBIDDEN_FEATURE_COLUMNS` no pueden entrar como features.
 
-* :func:`make_group_split`           — split simple respetando grupos.
-* :func:`make_group_kfold`           — iterador de folds por grupo.
-* :func:`build_logreg_pipeline`      — baseline lineal con escalado.
-* :func:`build_rf_pipeline`          — baseline Random Forest.
-* :func:`build_xgb_pipeline`         — baseline XGBoost (si está instalado).
-* :func:`assert_no_forbidden_features` — chequea que ``beat_type`` y otras
-  columnas prohibidas no estén entre las features.
+Pipeline base:
+    ``SimpleImputer(strategy="median") -> StandardScaler -> Classifier``
+
+El imputer es necesario porque algunas features pueden contener NaN (ventanas
+degeneradas, divisiones por cero en estadísticas, etc.). El escalado se aplica
+en pipelines lineales; para Random Forest se omite por ser invariante a
+escala. Todas las etapas viven dentro del mismo ``Pipeline`` para evitar
+fugas (el `fit` se hace solo sobre train).
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from typing import Iterable, Iterator
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 from sklearn.pipeline import Pipeline
@@ -74,31 +78,66 @@ def make_group_split(X: pd.DataFrame | np.ndarray,
     return train_idx, test_idx
 
 
+def safe_n_splits(n_splits_requested: int,
+                  groups: pd.Series | np.ndarray) -> int:
+    """Recorta ``n_splits`` al número de grupos únicos disponibles.
+
+    ``GroupKFold`` exige ``n_splits <= n_groups``. Este helper devuelve el
+    mínimo entre lo pedido y los grupos disponibles, asegurando además que
+    haya al menos 2 grupos para que el split tenga sentido.
+
+    Raises
+    ------
+    ValueError
+        Si hay menos de 2 grupos únicos.
+    """
+    n_groups = int(np.unique(np.asarray(groups)).shape[0])
+    if n_groups < 2:
+        raise ValueError(
+            f"Se necesitan al menos 2 `case_id` únicos para hacer GroupKFold. "
+            f"Recibí n_groups={n_groups}."
+        )
+    return min(int(n_splits_requested), n_groups)
+
+
 def make_group_kfold(X: pd.DataFrame | np.ndarray,
                      y: pd.Series | np.ndarray,
                      groups: pd.Series | np.ndarray,
                      n_splits: int = DEFAULT_N_SPLITS
                      ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
-    """Iterador de folds ``GroupKFold`` por `case_id`."""
-    kf = GroupKFold(n_splits=n_splits)
+    """Iterador de folds ``GroupKFold`` por `case_id`.
+
+    Ajusta automáticamente ``n_splits`` con :func:`safe_n_splits` si el número
+    de grupos disponibles es menor que el solicitado.
+    """
+    n_splits_eff = safe_n_splits(n_splits, groups)
+    kf = GroupKFold(n_splits=n_splits_eff)
     yield from kf.split(X, y, groups=groups)
 
 
 # ---------------------------------------------------------------------------
-# Pipelines baseline
+# Pipelines baseline (Imputer -> Scaler -> Clf)
 # ---------------------------------------------------------------------------
+def _build_imputer() -> SimpleImputer:
+    """SimpleImputer con mediana — robusto a outliers y NaN aislados."""
+    return SimpleImputer(strategy="median")
+
+
 def build_logreg_pipeline(class_weight: str | None = "balanced",
-                          random_state: int = RANDOM_SEED) -> Pipeline:
-    """Pipeline ``StandardScaler -> LogisticRegression`` multinomial."""
+                          random_state: int = RANDOM_SEED,
+                          max_iter: int = 2000) -> Pipeline:
+    """Pipeline ``Imputer -> Scaler -> LogisticRegression`` multinomial."""
     return Pipeline(
         steps=[
+            ("imputer", _build_imputer()),
             ("scaler", StandardScaler()),
             (
                 "clf",
                 LogisticRegression(
-                    max_iter=1000,
+                    max_iter=max_iter,
                     class_weight=class_weight,
                     multi_class="auto",
+                    solver="lbfgs",
                     random_state=random_state,
                 ),
             ),
@@ -109,9 +148,13 @@ def build_logreg_pipeline(class_weight: str | None = "balanced",
 def build_rf_pipeline(n_estimators: int = 300,
                       class_weight: str | None = "balanced",
                       random_state: int = RANDOM_SEED) -> Pipeline:
-    """Pipeline con un ``RandomForestClassifier`` (sin escalado)."""
+    """Pipeline ``Imputer -> RandomForestClassifier``.
+
+    Random Forest no requiere escalado de features.
+    """
     return Pipeline(
         steps=[
+            ("imputer", _build_imputer()),
             (
                 "clf",
                 RandomForestClassifier(
@@ -126,11 +169,11 @@ def build_rf_pipeline(n_estimators: int = 300,
 
 
 def build_xgb_pipeline(random_state: int = RANDOM_SEED) -> Pipeline:
-    """Pipeline con ``XGBClassifier``. Requiere `xgboost` instalado.
+    """Pipeline ``Imputer -> XGBClassifier``. Requiere `xgboost` instalado.
 
-    El balanceo de clases no está predefinido aquí; XGBoost expone
-    ``scale_pos_weight`` solo para binario. Para multiclase considera ajustar
-    `sample_weight` al entrenar.
+    El balanceo en multiclase se maneja vía ``sample_weight`` al llamar
+    ``fit`` (no se predefine aquí). Para inferencia se obtiene mediante
+    :func:`sklearn.utils.class_weight.compute_sample_weight`.
     """
     try:
         from xgboost import XGBClassifier  # type: ignore[import-not-found]
@@ -141,6 +184,7 @@ def build_xgb_pipeline(random_state: int = RANDOM_SEED) -> Pipeline:
 
     return Pipeline(
         steps=[
+            ("imputer", _build_imputer()),
             (
                 "clf",
                 XGBClassifier(

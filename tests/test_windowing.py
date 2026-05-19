@@ -78,3 +78,26 @@ def test_build_windows_overlap_adds_auxiliary_windows():
     )
     # Con overlap > 0 se añaden 2 ventanas auxiliares por latido (3 por latido).
     assert len(specs) >= len(beats)
+
+
+def test_build_windows_nan_label_becomes_none_not_string():
+    """NaN en `rhythm_label` debe propagarse como None, no como la cadena 'nan'."""
+    signal = _synthetic_signal(seconds=10, fs_hz=500)
+    beats = pd.DataFrame(
+        {
+            "time_second": [2.0, 4.0, 6.0],
+            "rhythm_label": ["Sinus", np.nan, "Sinus"],
+        }
+    )
+    _, specs = build_windows_for_case(
+        signal=signal,
+        beats=beats,
+        case_id=1,
+        fs_hz=500,
+        window_seconds=2.0,
+        overlap=0.0,
+    )
+    labels = [s.label for s in specs]
+    assert labels == ["Sinus", None, "Sinus"]
+    # Asegurar que nadie produzca el string literal "nan".
+    assert "nan" not in [str(lbl).lower() for lbl in labels if lbl is not None]

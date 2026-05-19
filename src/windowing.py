@@ -127,7 +127,13 @@ def build_windows_for_case(signal: np.ndarray,
         if step_samples > 0:
             centers.extend([center - step_samples, center + step_samples])
 
-        label_value = labels.loc[idx] if labels is not None else None
+        if labels is None:
+            label_value = None
+        else:
+            raw = labels.loc[idx]
+            # `pd.isna` cubre NaN (float), None y NaT; cualquiera de esos casos
+            # se trata como "sin etiqueta" para evitar la cadena literal "nan".
+            label_value = None if pd.isna(raw) else str(raw)
 
         for c in centers:
             start = c - half
@@ -141,7 +147,7 @@ def build_windows_for_case(signal: np.ndarray,
                     beat_index=int(idx),
                     start_sample=int(start),
                     end_sample=int(end),
-                    label=None if label_value is None else str(label_value),
+                    label=label_value,
                 )
             )
 
