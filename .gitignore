@@ -98,7 +98,6 @@ models/*
 !models/.gitkeep
 
 # Formatos de modelo en cualquier otra ubicación del repo
-*.joblib
 *.pt
 *.pth
 *.onnx
