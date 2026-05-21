@@ -93,8 +93,11 @@ data/raw/vitaldb_waveforms/*
 # ============================================================================
 # Modelos entrenados
 # ============================================================================
+# Ignorar todo el contenido de models/ por defecto
 models/*
 !models/.gitkeep
+
+# Formatos de modelo en cualquier otra ubicación del repo
 *.joblib
 *.pt
 *.pth
@@ -103,6 +106,13 @@ models/*
 *.pb
 *.ckpt
 *.safetensors
+
+# Artefactos de models/ necesarios para la app Streamlit — se incluyen en Git.
+# Estas excepciones deben ir DESPUÉS de *.joblib para tener precedencia.
+!models/README.md
+!models/*.joblib
+!models/feature_columns.json
+!models/model_artifacts_metadata.json
 
 # ============================================================================
 # Reportes generados automáticamente

@@ -1,0 +1,97 @@
+{
+  "training_datetime": "2026-05-21T14:47:55.415650",
+  "fast_mode": true,
+  "winner_model": "linear_svc",
+  "primary_metric": "test_f1_macro",
+  "winner_test_f1_macro": 0.3439059926305788,
+  "target": "rhythm_label",
+  "forbidden_columns": [
+    "beat_type",
+    "rhythm_label",
+    "case_id",
+    "bad_signal_quality"
+  ],
+  "feature_cols": [
+    "mean",
+    "std",
+    "var",
+    "min",
+    "max",
+    "range",
+    "median",
+    "p25",
+    "p75",
+    "iqr",
+    "skew",
+    "kurtosis",
+    "energy",
+    "zero_crossing_rate",
+    "abs_mean",
+    "rr_prev",
+    "rr_next",
+    "rr_mean_local",
+    "rr_ratio",
+    "case_rr_count",
+    "case_rr_mean",
+    "case_rr_std",
+    "case_rr_min",
+    "case_rr_max",
+    "case_rr_rmssd",
+    "case_rr_pnn50"
+  ],
+  "n_features": 26,
+  "train_size_rows": 509707,
+  "test_size_rows": 128983,
+  "n_train_groups": 384,
+  "n_test_groups": 97,
+  "best_hyperparams_per_model": {
+    "linear_svc": {
+      "clf__C": 0.0745934328572655
+    },
+    "decision_tree": {
+      "clf__min_samples_split": 2,
+      "clf__min_samples_leaf": 5,
+      "clf__max_depth": null,
+      "clf__criterion": "entropy"
+    },
+    "random_forest": {
+      "clf__n_estimators": 100,
+      "clf__min_samples_split": 2,
+      "clf__min_samples_leaf": 10,
+      "clf__max_features": 0.5,
+      "clf__max_depth": 10
+    },
+    "xgboost": {
+      "clf__subsample": 0.6,
+      "clf__n_estimators": 400,
+      "clf__min_child_weight": 3,
+      "clf__max_depth": 5,
+      "clf__learning_rate": 0.03,
+      "clf__colsample_bytree": 1.0
+    },
+    "mlp": {
+      "clf__learning_rate_init": 0.001,
+      "clf__hidden_layer_sizes": [
+        64,
+        32
+      ],
+      "clf__alpha": 0.01,
+      "clf__activation": "relu"
+    }
+  },
+  "saved_model_paths": {
+    "linear_svc": "C:\\Users\\juanc\\OneDrive\\Documentos\\Doctorado\\Cursos\\Curso machine\\vitaldb-arrhythmia-ml\\models\\linear_svc_best_pipeline.joblib",
+    "decision_tree": "C:\\Users\\juanc\\OneDrive\\Documentos\\Doctorado\\Cursos\\Curso machine\\vitaldb-arrhythmia-ml\\models\\decision_tree_best_pipeline.joblib",
+    "random_forest": "C:\\Users\\juanc\\OneDrive\\Documentos\\Doctorado\\Cursos\\Curso machine\\vitaldb-arrhythmia-ml\\models\\random_forest_best_pipeline.joblib",
+    "xgboost": "C:\\Users\\juanc\\OneDrive\\Documentos\\Doctorado\\Cursos\\Curso machine\\vitaldb-arrhythmia-ml\\models\\xgboost_best_pipeline.joblib",
+    "mlp": "C:\\Users\\juanc\\OneDrive\\Documentos\\Doctorado\\Cursos\\Curso machine\\vitaldb-arrhythmia-ml\\models\\mlp_best_pipeline.joblib"
+  },
+  "best_model_path": "C:\\Users\\juanc\\OneDrive\\Documentos\\Doctorado\\Cursos\\Curso machine\\vitaldb-arrhythmia-ml\\models\\best_model_pipeline.joblib",
+  "library_versions": {
+    "sklearn": "1.8.0",
+    "numpy": "1.26.4",
+    "pandas": "2.2.3",
+    "xgboost": "3.2.0",
+    "joblib": "1.5.3"
+  }
+}
