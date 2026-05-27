@@ -1,0 +1,150 @@
+/* Datos simulados compartidos por toda la app */
+
+const DATA = {
+  project: {
+    title: "ECG Arrhythmia ML",
+    subtitle: "Clasificación multiclase de ritmos intraoperatorios",
+    dataset: "VitalDB Arrhythmia Database",
+  },
+  topMetrics: {
+    cases: 482,
+    windows: 638142,
+    classes: 10,
+    models: 5,
+    bestModel: "LinearSVC",
+    primary: { name: "F1-macro", value: 0.742 },
+  },
+  models: [
+    { id: "LinearSVC",     f1: 0.742, prec: 0.751, rec: 0.738, acc: 0.918, time: 184, params: "C=0.5, class_weight=balanced" },
+    { id: "Random Forest", f1: 0.721, prec: 0.736, rec: 0.715, acc: 0.911, time: 612, params: "n=300, max_depth=22" },
+    { id: "XGBoost",       f1: 0.715, prec: 0.732, rec: 0.708, acc: 0.909, time: 451, params: "lr=0.08, depth=6" },
+    { id: "MLP",           f1: 0.689, prec: 0.704, rec: 0.681, acc: 0.897, time: 884, params: "(128,64), adam, drop=0.2" },
+    { id: "Decision Tree", f1: 0.612, prec: 0.628, rec: 0.602, acc: 0.864, time: 38,  params: "max_depth=18, min_leaf=4" },
+  ],
+  classes: [
+    { id: "NSR",   name: "Normal Sinus Rhythm",   prec: 0.96, rec: 0.97, f1: 0.965, support: 412304, tag: "ok"  },
+    { id: "SB",    name: "Sinus Bradycardia",     prec: 0.84, rec: 0.81, f1: 0.825, support:  78921, tag: "ok"  },
+    { id: "ST",    name: "Sinus Tachycardia",     prec: 0.81, rec: 0.79, f1: 0.800, support:  62147, tag: "ok"  },
+    { id: "PAC",   name: "Premature Atrial Contr.",prec:0.71, rec: 0.66, f1: 0.685, support:  28415, tag: "ok"  },
+    { id: "PVC",   name: "Premature Ventr. Contr.",prec:0.78, rec: 0.74, f1: 0.760, support:  31204, tag: "ok"  },
+    { id: "AFib",  name: "Atrial Fibrillation",   prec: 0.67, rec: 0.58, f1: 0.620, support:  11842, tag: "warn"},
+    { id: "AFlut", name: "Atrial Flutter",        prec: 0.58, rec: 0.49, f1: 0.530, support:   6418, tag: "warn"},
+    { id: "JR",    name: "Junctional Rhythm",     prec: 0.52, rec: 0.41, f1: 0.460, support:   3982, tag: "warn"},
+    { id: "VT",    name: "Ventricular Tachycardia",prec:0.49, rec: 0.34, f1: 0.400, support:   2104, tag: "err" },
+    { id: "Asys",  name: "Asystole",              prec: 0.41, rec: 0.28, f1: 0.330, support:    805, tag: "err" },
+  ],
+  features: [
+    { name: "rr_prev",         imp: 0.182, desc: "Intervalo RR previo" },
+    { name: "rr_ratio",        imp: 0.164, desc: "Razón rr_prev / rr_next" },
+    { name: "rr_next",         imp: 0.143, desc: "Intervalo RR siguiente" },
+    { name: "qrs_proxy",       imp: 0.118, desc: "Aprox. duración QRS" },
+    { name: "amplitude_std",   imp: 0.097, desc: "Desv. estándar amplitud" },
+    { name: "signal_energy",   imp: 0.082, desc: "Energía L2 ventana" },
+    { name: "amplitude_mean",  imp: 0.064, desc: "Media de amplitud" },
+    { name: "zero_crossings",  imp: 0.051, desc: "Cruces por cero" },
+    { name: "rr_var_local",    imp: 0.046, desc: "Varianza RR local (5 latidos)" },
+    { name: "spectral_centroid",imp: 0.034, desc: "Centroide espectral" },
+    { name: "skewness_w",      imp: 0.019, desc: "Asimetría de la ventana" },
+  ],
+  pipeline: [
+    { n: 1,  name: "Carga de datos",        sub: "VitalDB · 482 casos",   done: true },
+    { n: 2,  name: "EDA",                    sub: "perfilado · NaN",       done: true },
+    { n: 3,  name: "Limpieza",               sub: "filtros · banda 0.5–40 Hz", done: true },
+    { n: 4,  name: "Ventanas ECG",           sub: "2.0 s · 50% overlap",   done: true },
+    { n: 5,  name: "Feature engineering",    sub: "12 features",           done: true },
+    { n: 6,  name: "Split por case_id",      sub: "GroupKFold",            done: true },
+    { n: 7,  name: "Entrenamiento",          sub: "5 modelos baseline",    done: true },
+    { n: 8,  name: "Búsqueda hiperparámetros",sub: "RandomizedSearchCV",   done: true },
+    { n: 9,  name: "Evaluación final",       sub: "F1-macro / CM",         done: true, curr: true },
+    { n: 10, name: "Interpretabilidad",      sub: "permutation imp.",      done: false },
+    { n: 11, name: "Demo de predicción",     sub: "casos preseleccionados", done: false },
+  ],
+  cleaning: {
+    signalsAudited: 2410,
+    windowsGenerated: 712380,
+    windowsValid: 638142,
+    windowsDiscarded: 74238,
+    casesValid: 461,
+    casesExcluded: 21,
+  },
+  discardReasons: [
+    { reason: "NaN > 5% en ventana",    n: 31204 },
+    { reason: "Saturación / clipping",  n: 18412 },
+    { reason: "Ruido alto (SNR < 8 dB)",n: 12810 },
+    { reason: "Pulso ausente",          n:  6841 },
+    { reason: "Anotación inconsistente",n:  4971 },
+  ],
+  topConfusions: [
+    { a: "AFib",  b: "PAC",   n: 1841, pct: 0.156 },
+    { a: "AFlut", b: "AFib",  n:  982, pct: 0.153 },
+    { a: "VT",    b: "PVC",   n:  462, pct: 0.220 },
+    { a: "JR",    b: "NSR",   n:  874, pct: 0.219 },
+    { a: "Asys",  b: "NSR",   n:  362, pct: 0.450 },
+    { a: "PVC",   b: "NSR",   n: 2104, pct: 0.067 },
+  ],
+  // Casos demo para "Jugar con predicciones"
+  demoCases: [
+    {
+      id: "CASE-0142-w017",
+      caseId: 142, window: 17, beatT: 1.02,
+      category: "Caso bien clasificado",
+      categoryTag: "ok",
+      real: "PVC", pred: "PVC", correct: true,
+      probs: { PVC: 0.86, NSR: 0.08, PAC: 0.03, ST: 0.02, otro: 0.01 },
+      features: { rr_prev: 0.78, rr_next: 1.12, rr_ratio: 0.70, amplitude_mean: 0.18, amplitude_std: 0.41, signal_energy: 7.42, qrs_proxy: 0.118 },
+      note: "Latido ventricular prematuro con QRS ancho (118 ms) y pausa compensatoria clara. El modelo separa correctamente del ritmo sinusal previo y posterior."
+    },
+    {
+      id: "CASE-0307-w204",
+      caseId: 307, window: 204, beatT: 1.00,
+      category: "Caso mal clasificado",
+      categoryTag: "err",
+      real: "AFib", pred: "PAC", correct: false,
+      probs: { PAC: 0.52, AFib: 0.31, NSR: 0.10, ST: 0.05, otro: 0.02 },
+      features: { rr_prev: 0.62, rr_next: 0.81, rr_ratio: 0.77, amplitude_mean: 0.14, amplitude_std: 0.22, signal_energy: 4.18, qrs_proxy: 0.092 },
+      note: "Fibrilación auricular con variabilidad RR moderada confundida con extrasístole auricular. Es una confusión frecuente que aparece en la matriz."
+    },
+    {
+      id: "CASE-0021-w003",
+      caseId: 21, window: 3, beatT: 1.00,
+      category: "Clase dominante",
+      categoryTag: "info",
+      real: "NSR", pred: "NSR", correct: true,
+      probs: { NSR: 0.97, SB: 0.02, ST: 0.01, otro: 0.00 },
+      features: { rr_prev: 0.84, rr_next: 0.86, rr_ratio: 0.98, amplitude_mean: 0.16, amplitude_std: 0.19, signal_energy: 3.71, qrs_proxy: 0.094 },
+      note: "Ritmo sinusal normal estable. Es la clase mayoritaria (~65%) y el modelo la predice con alta confianza."
+    },
+    {
+      id: "CASE-0511-w092",
+      caseId: 511, window: 92, beatT: 1.04,
+      category: "Clase minoritaria",
+      categoryTag: "warn",
+      real: "VT", pred: "PVC", correct: false,
+      probs: { PVC: 0.46, VT: 0.39, NSR: 0.10, otro: 0.05 },
+      features: { rr_prev: 0.41, rr_next: 0.39, rr_ratio: 1.05, amplitude_mean: 0.21, amplitude_std: 0.52, signal_energy: 9.14, qrs_proxy: 0.142 },
+      note: "Taquicardia ventricular (clase minoritaria, <0.4% del dataset) confundida con extrasístoles ventriculares aisladas."
+    },
+    {
+      id: "CASE-0238-w145",
+      caseId: 238, window: 145, beatT: 1.08,
+      category: "Confusión frecuente",
+      categoryTag: "warn",
+      real: "AFlut", pred: "AFib", correct: false,
+      probs: { AFib: 0.48, AFlut: 0.41, PAC: 0.08, otro: 0.03 },
+      features: { rr_prev: 0.55, rr_next: 0.58, rr_ratio: 0.95, amplitude_mean: 0.13, amplitude_std: 0.18, signal_energy: 3.32, qrs_proxy: 0.088 },
+      note: "Flutter auricular con conducción variable. Sin onda F clara, las features RR no logran separarlo de fibrilación auricular."
+    },
+    {
+      id: "CASE-0078-w412",
+      caseId: 78, window: 412, beatT: 1.02,
+      category: "Arritmia relevante",
+      categoryTag: "info",
+      real: "SB", pred: "SB", correct: true,
+      probs: { SB: 0.84, NSR: 0.13, JR: 0.02, otro: 0.01 },
+      features: { rr_prev: 1.32, rr_next: 1.30, rr_ratio: 1.02, amplitude_mean: 0.17, amplitude_std: 0.21, signal_energy: 4.02, qrs_proxy: 0.096 },
+      note: "Bradicardia sinusal intraoperatoria (≈46 bpm). Frecuente bajo anestesia profunda."
+    },
+  ],
+};
+
+window.DATA = DATA;

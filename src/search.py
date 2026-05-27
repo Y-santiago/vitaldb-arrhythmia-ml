@@ -51,6 +51,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from scipy.stats import loguniform
+from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -151,45 +152,55 @@ def _random_forest_factory() -> Pipeline:
     )
 
 
-class _XGBClassifierSafe:
-    """Wrapper de XGBClassifier que reencoda etiquetas por fit.
+class _XGBClassifierSafe(BaseEstimator, ClassifierMixin):
+    """Wrapper de XGBClassifier compatible con sklearn ≥ 1.6 + XGBoost ≥ 2.0.
 
-    XGBoost ≥ 2.0 valida estrictamente que las clases de ``y`` sean enteros
-    consecutivos [0, num_class). Cuando se usa CV por grupo, un fold puede
-    quedar con un subconjunto de clases (p. ej. solo [0, 2]), lo que rompe
-    el check. Este wrapper aplica ``LabelEncoder`` dentro de ``fit`` y
-    revierte en ``predict`` para mantener etiquetas string en la API externa.
+    Hereda de ``BaseEstimator`` y ``ClassifierMixin`` para satisfacer el
+    protocolo ``__sklearn_tags__`` introducido en sklearn 1.6.
 
-    No se subclasa ``XGBClassifier`` para no confundir a ``sklearn.base.clone``;
-    se delega vía composición y se replican solo los hooks necesarios para
-    ``Pipeline`` + ``RandomizedSearchCV``.
+    XGBoost ≥ 2.0 requiere etiquetas enteras consecutivas [0, num_class).
+    Este wrapper aplica ``LabelEncoder`` en ``fit`` y lo revierte en
+    ``predict``/``predict_proba``, manteniendo etiquetas string en la API
+    externa y siendo completamente transparente para ``Pipeline`` +
+    ``RandomizedSearchCV``.
+
+    ``BaseEstimator.get_params()`` / ``set_params()`` funcionan
+    correctamente porque todos los parámetros de ``__init__`` están
+    declarados explícitamente y asignados a ``self.<mismo_nombre>``.
     """
 
-    def __init__(self, **xgb_kwargs):
-        from xgboost import XGBClassifier
-        self._xgb_cls = XGBClassifier
-        self._xgb_kwargs = xgb_kwargs
-        self._le = None
-        self._xgb = None
-        # sklearn estimator API
-        for k, v in xgb_kwargs.items():
-            setattr(self, k, v)
-
-    # --- sklearn API -------------------------------------------------------
-    def get_params(self, deep: bool = True) -> dict:
-        return dict(self._xgb_kwargs)
-
-    def set_params(self, **params):
-        self._xgb_kwargs.update(params)
-        for k, v in params.items():
-            setattr(self, k, v)
-        return self
+    def __init__(
+        self,
+        n_estimators: int = 100,
+        max_depth: int = 6,
+        learning_rate: float = 0.3,
+        subsample: float = 1.0,
+        colsample_bytree: float = 1.0,
+        min_child_weight: int = 1,
+        tree_method: str = "hist",
+        random_state: int | None = None,
+        n_jobs: int = 1,
+        eval_metric: str = "mlogloss",
+        verbosity: int = 0,
+    ):
+        self.n_estimators = n_estimators
+        self.max_depth = max_depth
+        self.learning_rate = learning_rate
+        self.subsample = subsample
+        self.colsample_bytree = colsample_bytree
+        self.min_child_weight = min_child_weight
+        self.tree_method = tree_method
+        self.random_state = random_state
+        self.n_jobs = n_jobs
+        self.eval_metric = eval_metric
+        self.verbosity = verbosity
 
     def fit(self, X, y, **kwargs):
         from sklearn.preprocessing import LabelEncoder
+        from xgboost import XGBClassifier
         self._le = LabelEncoder()
         y_enc = self._le.fit_transform(y)
-        self._xgb = self._xgb_cls(**self._xgb_kwargs)
+        self._xgb = XGBClassifier(**self.get_params())
         self._xgb.fit(X, y_enc, **kwargs)
         self.classes_ = self._le.classes_
         return self

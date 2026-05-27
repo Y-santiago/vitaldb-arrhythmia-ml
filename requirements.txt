@@ -12,3 +12,5 @@ jupyter
 ipykernel
 joblib
 pytest
+pyarrow
+fastparquet
