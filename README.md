@@ -1,23 +1,37 @@
 # VitalDB Arrhythmia ML
 
-Proyecto académico y exploratorio de machine learning para la **clasificación de
-ritmos cardíacos** (`rhythm_label`) a partir de segmentos temporales de ECG
-intraoperatorio, utilizando la *VitalDB Arrhythmia Database 1.0.0* publicada en
-PhysioNet.
+Proyecto académico y exploratorio de **clasificación multiclase de
+`rhythm_label`** usando datos **tabulares filtrados** de anotaciones y
+metadatos de la *VitalDB Arrhythmia Database 1.0.0* (PhysioNet).
 
-> **Advertencia académica.** Este proyecto tiene fines exclusivamente educativos
-> y de investigación exploratoria. **No constituye un dispositivo médico ni
-> debe usarse para diagnóstico, monitoreo o decisión clínica de ningún tipo.**
+> **Pivot metodológico (fase actual).** Esta iteración trabaja sobre datos
+> tabulares (anotaciones + metadata). El enfoque previo basado en señal
+> ECG cruda (descarga desde VitalDB + ventaneo de señal + features
+> temporales) queda como **línea exploratoria histórica** marcada como
+> `legacy` y no es el flujo principal de modelado.
+
+> **Advertencia académica.** Este proyecto tiene fines exclusivamente
+> educativos y de investigación exploratoria. **No constituye un
+> dispositivo médico ni debe usarse para diagnóstico, monitoreo o
+> decisión clínica de ningún tipo.**
 
 ---
 
 ## 1. Descripción del problema
 
 El objetivo es predecir la etiqueta de ritmo (`rhythm_label`) asociada a
-ventanas temporales de ECG extraídas alrededor de cada latido anotado en la
-*VitalDB Arrhythmia Database*. El problema se plantea como una tarea de
-**clasificación supervisada multiclase** sobre señales fisiológicas
-intraoperatorias.
+cada latido anotado en la *VitalDB Arrhythmia Database*. Se plantea como
+**clasificación supervisada multiclase** sobre un dataset tabular
+construido a partir de:
+
+- las anotaciones de PhysioNet (`time_second`, `bad_signal_quality`,
+  etiquetas de ritmo y latido por caso) y
+- los metadatos por caso (`metadata.csv`: edad, sexo, antropometría,
+  tipo de cirugía, anestesia, valores preoperatorios, etc.).
+
+A cada fila (un latido) se le adjuntan features temporales locales
+dentro del caso (`rr_prev`, `rr_next`, `hr_inst_from_rr_prev`,
+`position_in_case`). **No se usa la señal ECG cruda en esta fase.**
 
 Aspectos relevantes:
 
@@ -30,6 +44,10 @@ Aspectos relevantes:
   su uso para análisis descriptivos complementarios.
 - Los registros marcados como `bad_signal_quality` se excluyen.
 - La clase `Noise` se excluye.
+- `case_id` se usa **únicamente** como grupo para validación; nunca como
+  predictor.
+- Columnas con fuga de información se excluyen del set de features (ver
+  `src/config.py::TABULAR_LEAKAGE_COLUMNS`).
 
 ---
 
@@ -37,35 +55,43 @@ Aspectos relevantes:
 
 - **PhysioNet**: *VitalDB Arrhythmia Database: An anesthesiologist-validated
   large-scale intraoperative arrhythmia dataset with beat and rhythm labels
-  1.0.0*. El paquete contiene metadata por caso y archivos de anotaciones
-  (latidos, ritmos, calidad de señal).
-- **VitalDB**: la señal ECG cruda **no** está incluida en el paquete de
-  PhysioNet. Se descarga desde VitalDB usando la librería oficial `vitaldb`,
-  indexando por `case_id`.
+  1.0.0*. El paquete contiene `metadata.csv` (1 fila por caso) y un archivo
+  `Annotation_file_<case_id>.csv` por caso con `time_second`, `beat_type`,
+  `rhythm_label`, `bad_signal_quality` y `bad_signal_quality_label`.
+- **VitalDB (no usado en esta fase).** La señal ECG cruda *no* está
+  incluida en el paquete y *no* se utiliza en la fase tabular actual.
+  Existe código `legacy` que la descargaba desde la librería oficial
+  `vitaldb`; ese flujo queda pausado.
 
-> El dataset de PhysioNet y las señales de VitalDB se distribuyen bajo sus
-> propios términos de uso. Consulta las licencias originales antes de
-> redistribuir cualquier subconjunto.
+> El dataset de PhysioNet se distribuye bajo sus propios términos de uso.
+> Consulta la licencia original antes de redistribuir cualquier subconjunto.
 
 ---
 
-## 3. Objetivo de la primera fase
+## 3. Objetivo de la fase actual (tabular)
 
-La primera fase es **exploratoria** y cubre:
+1. Auditar las anotaciones + metadata tras filtros (`Noise`,
+   `bad_signal_quality`, etiquetas nulas).
+2. Construir un dataset modelable (1 fila por latido) que combine metadata
+   por caso con features temporales locales (`rr_prev`, `rr_next`,
+   `hr_inst_from_rr_prev`, `position_in_case`).
+3. Split **80/20 por `case_id`** con cobertura de clases (sin métricas
+   de desempeño en la elección de semilla).
+4. Pipeline `ColumnTransformer(Imputer+Scaler / Imputer+OneHotEncoder) →
+   Clasificador` con `class_weight="balanced"` cuando aplica.
+5. `RandomizedSearchCV` sobre 6 modelos:
+   `logreg`, `decision_tree`, `random_forest`, `xgboost`, `linear_svc`,
+   `mlp`. Métrica primaria `f1_macro`.
+6. CV interna por grupo (`StratifiedGroupKFold` con fallback a
+   `GroupKFold`).
+7. Test congelado: se evalúa una sola vez al final.
 
-1. Estructuración del repositorio y dependencias.
-2. Carga y validación de metadata y anotaciones.
-3. EDA de anotaciones: distribución de `rhythm_label`, conteos por caso,
-   patrones de calidad de señal.
-4. Análisis de desbalance entre clases y solapamiento con calidad de señal.
-5. Carga de la señal ECG cruda desde VitalDB para un subconjunto reducido de
-   casos.
-6. Definición de ventanas temporales alrededor de cada latido.
-7. Extracción de features iniciales (estadísticas temporales y derivadas RR).
-8. Entrenamiento de un baseline pequeño con **validación por grupos
-   (`case_id`)**.
-
-No se busca aún optimizar un modelo final ni reportar resultados definitivos.
+**Estado de la línea ECG (legacy).** Notebooks `04` y `05`, módulos
+`src/search.py`, `src/download.py`, `src/windowing.py`, y los scripts
+`scripts/01_download_all_available_ecg.py` /
+`scripts/02_build_features_all_windows.py` /
+`scripts/03_run_hyperparameter_search.py` (ECG) están marcados con un
+banner `[LEGACY — ...]` en su docstring. No son el flujo activo.
 
 ---
 
@@ -85,31 +111,50 @@ vitaldb-arrhythmia-ml/
 │   │   └── vitaldb_waveforms/       # ECG descargado de VitalDB (no se versiona)
 │   ├── interim/                     # transformaciones intermedias (no se versiona)
 │   └── processed/                   # datasets listos para modelado (no se versiona)
+├── scripts/                                            # flujo activo (tabular)
+│   ├── 01_audit_filtered_tabular_dataset.py
+│   ├── 02_build_filtered_tabular_modeling_dataset.py
+│   ├── 03_run_tabular_hyperparameter_search.py
+│   ├── 01_download_all_available_ecg.py                # legacy (ECG)
+│   ├── 02_build_features_all_windows.py                # legacy (ECG)
+│   └── 03_run_hyperparameter_search.py                 # legacy (ECG)
 ├── notebooks/
-│   ├── 01_download_and_structure.ipynb
-│   ├── 02_eda_annotations.ipynb
-│   ├── 03_ecg_loading_and_visualization.ipynb
-│   ├── 04_windowing_and_feature_engineering.ipynb
-│   └── 05_baseline_modeling.ipynb
+│   ├── 01_download_and_structure.ipynb                 # exploratorio
+│   ├── 02_eda_annotations.ipynb                        # exploratorio
+│   ├── 03_ecg_loading_and_visualization.ipynb          # legacy (ECG)
+│   ├── 04_windowing_and_feature_engineering.ipynb      # legacy (ECG)
+│   ├── 05_baseline_modeling.ipynb                      # legacy (ECG)
+│   ├── 06_full_modeling_hyperparameter_search.ipynb    # legacy (ECG)
+│   └── 06_tabular_modeling_hyperparameter_search.ipynb # flujo activo
 ├── src/
 │   ├── __init__.py
 │   ├── config.py
 │   ├── data_loading.py
-│   ├── download.py
-│   ├── preprocessing.py
-│   ├── windowing.py
-│   ├── features.py
-│   ├── modeling.py
+│   ├── download.py            # legacy (vitaldb.load_case)
+│   ├── preprocessing.py       # filtros + build_tabular_preprocessor
+│   ├── windowing.py           # legacy (ventaneo de señal)
+│   ├── features.py            # estadísticas + per_beat_rr (legacy en parte)
+│   ├── modeling.py            # split por grupo + utilidades comunes
+│   ├── search.py              # legacy (búsqueda sobre features ECG)
+│   ├── tabular_search.py      # flujo activo (búsqueda tabular)
 │   ├── evaluation.py
 │   └── utils.py
 ├── reports/
 │   ├── figures/
-│   └── tables/
+│   ├── tables/
+│   ├── PROJECT_REPORT.md
+│   ├── TABULAR_MODELING_REPORT.md
+│   ├── MODELING_REPORT.md     # legacy (corrida ECG)
+│   └── NEXT_STEPS_FOR_CHATGPT.md
 ├── models/
 └── tests/
     ├── test_data_loading.py
     ├── test_windowing.py
-    └── test_features.py
+    ├── test_features.py
+    ├── test_modeling.py
+    ├── test_evaluation.py
+    ├── test_search.py
+    └── test_tabular_search.py
 ```
 
 ---
@@ -165,12 +210,12 @@ en los notebooks.
    Debe quedar visible al menos `metadata.csv` y la carpeta de archivos de
    anotación.
 
-### 6.2 Señal ECG cruda (VitalDB)
+### 6.2 Señal ECG cruda (VitalDB) — *no usada en la fase tabular*
 
-La descarga se realiza desde código usando la librería `vitaldb`. El notebook
-`03_ecg_loading_and_visualization.ipynb` muestra el flujo. Los waveforms
-descargados se almacenan localmente en `data/raw/vitaldb_waveforms/` (también
-excluida por `.gitignore`).
+Esta fase **no descarga** señales ECG. El flujo activo consume únicamente
+las anotaciones y la metadata de PhysioNet. El código que descargaba
+desde VitalDB queda como `legacy` (ver banner en
+`scripts/01_download_all_available_ecg.py` y `src/download.py`).
 
 ---
 
@@ -189,27 +234,37 @@ excluida por `.gitignore`).
 
 ---
 
-## 8. Flujo de trabajo recomendado
+## 8. Flujo de trabajo recomendado (fase tabular)
 
-1. **`notebooks/01_download_and_structure.ipynb`** — verificación del paquete
-   de PhysioNet en disco, lectura inicial de `metadata.csv` y exploración
-   estructural de las anotaciones.
-2. **`notebooks/02_eda_annotations.ipynb`** — EDA sobre las anotaciones:
-   distribución de `rhythm_label`, conteos por caso, distribución de
-   `bad_signal_quality`, solapamientos de clases, análisis descriptivo
-   complementario sobre `beat_type` *(no se usa como predictor)*.
-3. **`notebooks/03_ecg_loading_and_visualization.ipynb`** — carga de la señal
-   ECG cruda desde VitalDB para un subconjunto reducido de casos y
-   visualización de tramos.
-4. **`notebooks/04_windowing_and_feature_engineering.ipynb`** — definición de
-   ventanas temporales alrededor de cada latido (con sobrelapamiento opcional)
-   y extracción de features temporales y RR.
-5. **`notebooks/05_baseline_modeling.ipynb`** — *split por `case_id`* con
-   `GroupKFold` o similar, entrenamiento de un baseline pequeño y reporte de
-   métricas macro.
+### 8.1 Pipeline activo (sin ECG crudo)
 
-Toda transformación importante debe poder ejecutarse también vía los módulos
-de `src/` para mantener reproducibilidad fuera de los notebooks.
+```bash
+# 1. Auditar anotaciones + metadata
+python scripts/01_audit_filtered_tabular_dataset.py
+
+# 2. Construir el dataset modelable
+python scripts/02_build_filtered_tabular_modeling_dataset.py
+
+# 3. Búsqueda de hiperparámetros multi-modelo
+#    (debug rápido)
+python scripts/03_run_tabular_hyperparameter_search.py --debug
+#    (full run)
+python scripts/03_run_tabular_hyperparameter_search.py --n-iter 30 --n-splits 5
+```
+
+El notebook equivalente, con celdas inspeccionables, es
+`notebooks/06_tabular_modeling_hyperparameter_search.ipynb`.
+
+### 8.2 Línea exploratoria (legacy, NO usar en esta fase)
+
+Los notebooks `01–05` y `06_full_modeling_hyperparameter_search.ipynb`,
+junto con `scripts/01_download_all_available_ecg.py`,
+`scripts/02_build_features_all_windows.py` y
+`scripts/03_run_hyperparameter_search.py`, son la línea exploratoria
+basada en ECG crudo. Quedan disponibles como referencia histórica.
+
+Toda transformación importante debe poder ejecutarse también vía los
+módulos de `src/` para mantener reproducibilidad fuera de los notebooks.
 
 ---
 
