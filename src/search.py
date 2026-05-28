@@ -162,6 +162,7 @@ class _XGBClassifierSafe(BaseEstimator, ClassifierMixin):
         colsample_bytree: float = 1.0,
         min_child_weight: int = 1,
         tree_method: str = "hist",
+        device: str = "cpu",
         random_state: int | None = None,
         n_jobs: int = 1,
         eval_metric: str = "mlogloss",
@@ -174,6 +175,7 @@ class _XGBClassifierSafe(BaseEstimator, ClassifierMixin):
         self.colsample_bytree = colsample_bytree
         self.min_child_weight = min_child_weight
         self.tree_method = tree_method
+        self.device = device
         self.random_state = random_state
         self.n_jobs = n_jobs
         self.eval_metric = eval_metric
@@ -197,8 +199,35 @@ class _XGBClassifierSafe(BaseEstimator, ClassifierMixin):
         return self._xgb.predict_proba(X)
 
 
+def _detect_cuda() -> tuple[bool, str]:
+    """Detecta GPU NVIDIA via nvidia-smi. Sin dependencias externas.
+
+    Returns (cuda_disponible, nombre_gpu).
+    """
+    import subprocess
+    try:
+        r = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if r.returncode == 0:
+            gpu_name = r.stdout.strip().split("\n")[0]
+            if gpu_name:
+                return True, gpu_name
+    except Exception:
+        pass
+    return False, ""
+
+
 def _xgboost_factory() -> Pipeline:
-    """XGBoost envuelto con re-encoding seguro por fit (ver :class:`_XGBClassifierSafe`)."""
+    """XGBoost envuelto con re-encoding seguro por fit (ver :class:`_XGBClassifierSafe`).
+
+    Detecta CUDA automáticamente: si hay GPU disponible usa ``device='cuda'``
+    y ``n_jobs=1`` (la GPU maneja el paralelismo internamente).
+    """
+    _cuda, _ = _detect_cuda()
+    _device  = "cuda" if _cuda else "cpu"
+    _njobs   = 1 if _cuda else -1
     return Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
@@ -206,8 +235,9 @@ def _xgboost_factory() -> Pipeline:
                 "clf",
                 _XGBClassifierSafe(
                     tree_method="hist",
+                    device=_device,
                     random_state=RANDOM_SEED,
-                    n_jobs=-1,
+                    n_jobs=_njobs,
                     eval_metric="mlogloss",
                     verbosity=0,
                     n_estimators=100,
