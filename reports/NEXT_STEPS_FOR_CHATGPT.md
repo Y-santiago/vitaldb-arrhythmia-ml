@@ -1,287 +1,259 @@
-# Estado para la siguiente instrucción (handoff)
+# Estado del proyecto y siguiente instrucción (handoff)
 
-**Fecha del handoff:** 2026-05-19
-**Rama actual:** `main`
-**Último commit antes del handoff:** ver `git log -1 --oneline`.
+**Fecha:** 2026-05-27
+**Rama:** `main`
+**Iteración actual:** pivot a modelado tabular (sin ECG crudo).
 
-Este documento resume objetivamente qué se hizo en la iteración de
-modelado e hiperparámetros, qué quedó pendiente y qué decisiones técnicas
-hay que tomar antes de continuar.
+Documento dirigido a que ChatGPT revise el estado real y dé la siguiente
+instrucción técnica sin tener que adivinar nada.
 
 ---
 
 ## 1. Estado exacto del repositorio
 
-```
-vitaldb-arrhythmia-ml/
-├── src/                    # módulos del paquete (importables como `from src import ...`)
-│   ├── config.py           # rutas, columnas, semillas, regex de archivos
-│   ├── data_loading.py     # carga metadata + anotaciones (inyecta case_id desde filename)
-│   ├── download.py         # wrapper a vitaldb.load_case y persistencia a .npy
-│   ├── preprocessing.py    # filtros base (Noise, bad_signal_quality)
-│   ├── windowing.py        # construcción de ventanas alrededor de cada latido
-│   ├── features.py         # 15 features temporales + 4 RR locales por latido
-│   ├── modeling.py         # split por grupo, safe_n_splits, pipelines baseline
-│   ├── search.py           # MODEL_REGISTRY + orquestación de RandomizedSearchCV
-│   ├── evaluation.py       # métricas macro, soporte por split, matrices con totales
-│   └── utils.py            # logger, set_seed, ensure_dir, list_files
-├── scripts/
-│   ├── 01_download_all_available_ecg.py        # descarga ECG masiva
-│   ├── 02_build_features_all_windows.py        # genera 3 parquets (1.2/2.0/5.0 s)
-│   └── 03_run_hyperparameter_search.py         # CLI de la búsqueda completa
-├── notebooks/
-│   ├── 01_download_and_structure.ipynb         # local (no commiteado)
-│   ├── 02_eda_annotations.ipynb                # local (no commiteado)
-│   ├── 03_ecg_loading_and_visualization.ipynb  # local (no commiteado)
-│   ├── 04_windowing_and_feature_engineering.ipynb
-│   ├── 05_baseline_modeling.ipynb
-│   └── 06_full_modeling_hyperparameter_search.ipynb   # nuevo
-├── reports/
-│   ├── MODELING_REPORT.md                      # nuevo (informe técnico)
-│   ├── NEXT_STEPS_FOR_CHATGPT.md               # este archivo
-│   ├── PROJECT_REPORT.md                       # estado previo
-│   ├── tables/                                 # CSVs reales producidos (ignorados por git)
-│   └── figures/                                # PNGs reales producidos (ignorados por git)
-├── tests/
-│   ├── test_data_loading.py
-│   ├── test_windowing.py
-│   ├── test_features.py
-│   ├── test_modeling.py
-│   ├── test_evaluation.py
-│   └── (pendiente: tests de split-with-coverage y search)
-├── data/
-│   ├── raw/physionet_annotations/              # paquete PhysioNet (en disco, no en git)
-│   ├── raw/vitaldb_waveforms/                  # 3 archivos `.npy` (en disco, no en git)
-│   ├── interim/                                # vacío
-│   └── processed/                              # 3 parquets generados (no en git)
-└── models/                                     # vacío
-```
+### 1.1 Flujo activo (tabular)
+- `scripts/01_audit_filtered_tabular_dataset.py` — audita anotaciones +
+  metadata y produce 5 CSVs descriptivos en `reports/tables/`.
+- `scripts/02_build_filtered_tabular_modeling_dataset.py` — construye
+  `data/processed/filtered_tabular_modeling_dataset.parquet` (639 460
+  filas × 85 columnas, 482 cases, 10 clases).
+- `scripts/03_run_tabular_hyperparameter_search.py` — CLI de
+  `RandomizedSearchCV` multi-modelo con CV por grupo. Genera todos los
+  CSVs/PNGs requeridos.
+- `src/preprocessing.py::build_tabular_preprocessor` — `ColumnTransformer`
+  con imputación + escalado para numéricas y imputación + OHE con
+  `handle_unknown="ignore"` para categóricas.
+- `src/modeling.py::make_train_test_group_split_with_coverage` — split
+  80/20 por `case_id` con búsqueda de cobertura de clases.
+- `src/tabular_search.py` — orquestación: `classify_features`,
+  `build_pipeline_for_model`, `MODEL_PARAM_DISTRIBUTIONS`,
+  `run_search_for_model`, `evaluate_on_test`, `extract_feature_importance`.
+- `notebooks/06_tabular_modeling_hyperparameter_search.ipynb` — wrapper
+  interactivo del mismo flujo.
 
-**Estado de tests:** `pytest tests/` corrió **50/50 OK** antes de la
-iteración. Los tests nuevos para la fase de modelado están pendientes y
-se añaden en Fase G (ver §5).
+### 1.2 Línea legacy (ECG crudo) — pausada
+Marcados con banner `[LEGACY — ...]` en su docstring:
+- `scripts/01_download_all_available_ecg.py`
+- `scripts/02_build_features_all_windows.py`
+- `scripts/03_run_hyperparameter_search.py`
+- `src/search.py`
+- Notebooks `03`, `04`, `05`, `06_full_modeling_hyperparameter_search.ipynb`
+- `reports/MODELING_REPORT.md` (informe de la corrida ECG previa)
 
-**Estado de git:** los notebooks 01-03 tienen modificaciones locales
-(outputs de ejecuciones del usuario) que NO se versionan por defecto.
-Los nuevos archivos `src/search.py`, `scripts/*.py`, `notebooks/06...ipynb`,
-`reports/MODELING_REPORT.md`, `reports/NEXT_STEPS_FOR_CHATGPT.md` están
-listos para commit.
+NO se ha eliminado nada de este flujo: queda como referencia histórica.
+
+### 1.3 Datos en disco (no versionados)
+- `data/raw/physionet_annotations/Annotation_Files/` — 482 archivos.
+- `data/raw/physionet_annotations/metadata.csv` — 482 × 79.
+- `data/raw/vitaldb_waveforms/` — 3 `.npy` legacy (case_1001, case_1002,
+  case_1018). No se usan en la fase tabular.
+- `data/processed/filtered_tabular_modeling_dataset.parquet` — 639 460 ×
+  85, generado por `scripts/02_build_filtered_tabular_modeling_dataset.py`.
 
 ---
 
-## 2. Archivos nuevos y modificados
+## 2. Archivos nuevos en esta iteración
 
 ### Nuevos
-
-| Path | Propósito |
-|---|---|
-| `src/search.py` | Registro de modelos, `WindowRunConfig`, `run_one_window`, ensamblaje de tablas de resultados. |
-| `scripts/__init__.py` | Marker package. |
-| `scripts/01_download_all_available_ecg.py` | CLI de descarga masiva desde VitalDB con tolerancia a fallos. |
-| `scripts/02_build_features_all_windows.py` | CLI para generar los 3 parquets por tamaño de ventana. |
-| `scripts/03_run_hyperparameter_search.py` | CLI de la búsqueda; produce todos los CSVs y PNGs requeridos. |
-| `notebooks/06_full_modeling_hyperparameter_search.ipynb` | Notebook interactivo equivalente al CLI 03. |
-| `reports/MODELING_REPORT.md` | Informe técnico con las 12 secciones obligatorias. |
-| `reports/NEXT_STEPS_FOR_CHATGPT.md` | Este archivo. |
+- `scripts/01_audit_filtered_tabular_dataset.py`
+- `scripts/02_build_filtered_tabular_modeling_dataset.py`
+- `scripts/03_run_tabular_hyperparameter_search.py`
+- `src/tabular_search.py`
+- `notebooks/06_tabular_modeling_hyperparameter_search.ipynb`
+- `tests/test_tabular_search.py`
+- `reports/TABULAR_MODELING_REPORT.md`
+- `reports/NEXT_STEPS_FOR_CHATGPT.md` (este archivo)
 
 ### Modificados
-
-| Path | Cambio |
-|---|---|
-| `src/config.py` | Sin cambios funcionales en esta iteración (revisado). |
-| `src/modeling.py` | Removido `multi_class="auto"` deprecado de LogReg. Nueva función `make_train_test_group_split_with_coverage(X, y, groups, test_size, random_state, max_attempts)` que itera semillas para maximizar cobertura de clases sin usar métricas de desempeño. |
-| `src/features.py` | Añadida `compute_per_beat_rr_features(beat_times)` que retorna `rr_prev`, `rr_next`, `rr_mean_local`, `rr_ratio` por latido. |
+- `src/config.py` — añade `TABULAR_LEAKAGE_COLUMNS`,
+  `TABULAR_MAX_CATEGORY_CARDINALITY`, `TABULAR_OHE_MIN_FREQUENCY`,
+  `TABULAR_DATASET_FILENAME`.
+- `src/preprocessing.py` — añade `build_tabular_preprocessor`.
+- `src/search.py` — banner `[LEGACY]`.
+- `scripts/01_download_all_available_ecg.py` — banner `[LEGACY]`.
+- `scripts/02_build_features_all_windows.py` — banner `[LEGACY]`.
+- `scripts/03_run_hyperparameter_search.py` — banner `[LEGACY]`.
+- `README.md` — pivot metodológico, estructura actualizada, flujo
+  recomendado tabular.
 
 ---
 
-## 3. Comandos ejecutados
-
-Reproducibilidad de esta corrida (puede repetirse desde cero):
+## 3. Comandos ejecutados (reproducibilidad)
 
 ```bash
-# Verificar dependencias (vitaldb, xgboost, sklearn, pandas, etc. ya instaladas)
-python -c "import sklearn, xgboost, vitaldb, pandas, numpy"
-
-# 1) Descarga de ECG (en debug = solo los 3 que estaban cacheados)
-python scripts/01_download_all_available_ecg.py --case-ids 1001,1002,1018
-
-# 2) Generación de features para los 3 tamaños de ventana
-python scripts/02_build_features_all_windows.py --debug
-
-# 3) Búsqueda de hiperparámetros (debug: n_iter=3, n_splits=2, n_jobs=1)
-python scripts/03_run_hyperparameter_search.py --debug
-
-# Tests
+# Tests (deben pasar)
 python -m pytest tests/
+
+# Pipeline tabular:
+python scripts/01_audit_filtered_tabular_dataset.py
+python scripts/02_build_filtered_tabular_modeling_dataset.py
+
+# Búsqueda de hiperparámetros — debug (≈ 5-10 min):
+python scripts/03_run_tabular_hyperparameter_search.py --debug
+
+# Full run (puede tardar horas con n_iter=30 y los 6 modelos):
+python scripts/03_run_tabular_hyperparameter_search.py --n-iter 30 --n-splits 5
 ```
 
-Outputs generados (los archivos están en disco pero ignorados por git):
+---
 
-- `data/processed/features_w1p2s.parquet`, `features_w2p0s.parquet`,
-  `features_w5p0s.parquet` (3373 × 27 cada uno).
-- `reports/tables/download_status.csv`, `full_model_comparison.csv`,
-  `full_model_comparison_by_window.csv`, `best_hyperparameters.csv`,
-  `class_support_train_test_by_window.csv`, `classes_missing_by_split.csv`,
-  `test_classification_report_best_model.csv`,
-  `test_confusion_matrix_best_model_with_totals.csv`,
-  `hyperparameter_search_meta.json`.
-- `reports/figures/confusion_matrix_best_model_absolute.png`,
-  `confusion_matrix_best_model_normalized.png`.
+## 4. Resultados principales
+
+### 4.1 Auditoría del dataset (reproducible y firme)
+Fuente: `reports/tables/tabular_dataset_audit.csv`.
+
+| métrica | valor |
+|---|---:|
+| filas antes filtros | 676 250 |
+| filas después filtros | 639 460 |
+| cases (antes y después) | 482 |
+| clases `rhythm_label` | 10 |
+| features numéricas candidatas | 54 |
+| features categóricas candidatas | 17 |
+
+Clases dominantes: `N` (61 %), `AFIB/AFL` (25 %). Minoritarias críticas:
+`AVB` (10 cases), `Unclassifiable` (5 cases).
+
+### 4.2 Split (sobre dataset completo, `random_state=42`)
+- `chosen_seed=42`, 10/10 clases cubiertas en train y test.
+- `train`: 385 cases / 510 287 filas.
+- `test`: 97 cases / 129 173 filas.
+- `actual_test_fraction = 0.202`.
+
+### 4.3 Modelos — corrida `--debug` ejecutada (60 cases, n_iter=3, n_splits=2)
+
+Resultados reales del run documentado en
+`reports/tables/tabular_hyperparameter_search_meta.json`:
+
+| modelo | test_f1_macro | test_bal_acc | test_accuracy | fit_seconds |
+|---|---:|---:|---:|---:|
+| logreg | 0.151 | 0.272 | 0.412 | 82.8 |
+| decision_tree | 0.078 | 0.112 | 0.166 | 12.9 |
+| random_forest | 0.144 | 0.157 | 0.566 | 57.7 |
+| xgboost | 0.085 | 0.113 | 0.560 | 97.4 |
+| **linear_svc** | **0.189** | **0.356** | 0.354 | 149.6 |
+| mlp | 0.126 | 0.126 | 0.344 | 83.7 |
+
+Total wall-clock: ~9 minutos.
+
+### 4.4 Mejor modelo (debug)
+`linear_svc` con `clf__C ≈ 56.7` y `class_weight="balanced"`.
+
+Por clase en test (debug, 16 085 filas en test):
+
+| clase | precision | recall | f1 | support |
+|---|---:|---:|---:|---:|
+| AFIB/AFL | 0.405 | 0.843 | 0.547 | 4 070 |
+| SND | 0.445 | 0.999 | 0.616 | 699 |
+| N | 0.665 | 0.141 | 0.233 | 9 075 |
+| Patterned Ventricular Ectopy | 0.371 | 0.211 | 0.269 | 1 295 |
+| AVB, Patterned Atrial Ectopy, WAP/MAT | 0 | 0 | 0 | 465+362+15 |
+| SVTA | 0.006 | 1.000 | 0.012 | 19 |
+| VT | 1.000 | 0.012 | 0.023 | 85 |
+
+Detalle completo en `reports/tables/tabular_best_model_classification_report.csv` y
+`reports/tables/tabular_confusion_matrix_absolute.csv`. La matriz
+muestra que LinearSVC con `class_weight="balanced"` está sobre-prediciendo
+SVTA, sacrificando precision a cambio de recall.
 
 ---
 
-## 4. Resultados principales (de la corrida real)
+## 5. Problemas encontrados y soluciones aplicadas
 
-Cohorte: 3 case_id (1001, 1002, 1018). Modo `--debug`.
-
-### Mejor modelo global
-
-| campo | valor |
-|---|---|
-| modelo | `xgboost` |
-| ventana | 5.0 s |
-| `test_f1_macro` | 0.386 |
-| `test_balanced_accuracy` | 0.647 |
-| `test_accuracy` | 0.905 |
-| `cv_f1_macro` | 0.286 |
-| best_params | `n_estimators=400, max_depth=10, learning_rate=0.01, subsample=1.0, colsample_bytree=0.8, min_child_weight=5` |
-
-### Mejor por ventana (`test_f1_macro`)
-
-| ventana | mejor modelo | test_f1_macro |
-|---:|---|---:|
-| 1.2 s | logreg | 0.322 |
-| 2.0 s | decision_tree | 0.375 |
-| 5.0 s | xgboost | 0.386 |
-
-### Split usado (igual en las 3 ventanas)
-
-- `chosen_seed = 44`
-- `train_groups = [1001, 1002]`, `test_groups = [1018]`
-- `actual_test_fraction = 0.314` (objetivo 0.20; imposible con solo 3 grupos)
-- Clases en train: `N, Patterned Ventricular Ectopy, SVTA`
-- Clases en test: `N, SVTA, VT`
-- **`VT` no aparece en train** → recall 0 obligatorio para esa clase
-- **`Patterned Ventricular Ectopy` no aparece en test** → no se mide su F1
-
-### Matriz de confusión del ganador (test, absoluta)
-
-|                | pred N | pred SVTA | pred VT | support_true |
-|---             |---:    |---:       |---:     |---:          |
-| **N** (1008)   | 948    | 60        | 0       | 1008         |
-| **SVTA** (11)  | 0      | 11        | 0       | 11           |
-| **VT** (41)    | 9      | 32        | 0       | 41           |
-
----
-
-## 5. Problemas encontrados y cómo se resolvieron
-
-| Problema | Causa raíz | Resolución aplicada |
+| Problema | Causa raíz | Solución |
 |---|---|---|
-| `XGBClassifier` lanzaba `Invalid classes inferred from unique values of y. Expected: [0 1], got [0 2]` durante CV. | XGBoost ≥ 2.0 valida estrictamente que las clases sean enteros consecutivos; cuando un fold de GroupKFold tiene un subconjunto de clases, el `LabelEncoder` externo deja gaps. | Wrapper `_XGBClassifierSafe` en `src/search.py` que reencoda labels dentro de su `fit` y revierte en `predict`. |
-| `MLPClassifier` fallaba con `TypeError: ufunc 'isnan' not supported` cuando `early_stopping=True`. | Bug conocido de sklearn con etiquetas string + early stopping. | `early_stopping=False` en `_mlp_factory`. Trade-off: más `max_iter`. |
-| Test fraction = 0.314 en vez de 0.20. | Con 3 grupos, `GroupShuffleSplit(test_size=0.2)` redondea a 1 grupo → el grupo más grande arrastra la fracción. | Documentado. Se resuelve con más casos. |
-| Clases ausentes en train o test. | Cohorte chica con clases concentradas en pocos casos. | `make_train_test_group_split_with_coverage` selecciona la mejor cobertura posible y reporta clases faltantes. Estructural; no resoluble sin más datos. |
-| `multi_class="auto"` deprecation warning en LogReg (sklearn ≥ 1.5). | Comportamiento default es ahora `multinomial`. | Removido el argumento de `_logreg_factory`. |
+| `caseid` (97 % NaN) en el merge | Un archivo (Annotation_file_2453) tiene la columna `caseid` en lugar de `bad_signal_quality_label`. | Añadido a `TABULAR_LEAKAGE_COLUMNS`. |
+| `age` venía como string | Algunas filas usan `>89` para anonimización. | Coerción `>89 → 89` en `02_build_*`. |
+| XGBoost ≥ 2.0 rechaza folds con clases no consecutivas | `LabelEncoder` global crea gaps cuando un fold pierde clases. | Wrapper `_XGBClassifierSafe` (re-encoding por fit). |
+| MLP + early stopping crashea con etiquetas string | `np.isnan(y_pred)` sobre strings. | `early_stopping=False`. |
+| Constantes ocultas tras filtros (`bad_signal_quality`, `caseid`, `casestart`, `airway`) | Tras aplicar filtros una columna puede quedar con un único valor. | Drop automático en `02_build_*` y detección en `classify_features`. |
+| Debug `n_jobs=1` demasiado lento | Modelos RF/MLP no paralelos. | `n_jobs=-1` también en debug. |
 
 ---
 
 ## 6. Preguntas técnicas pendientes
 
-1. **¿Reintento automático de errores de descarga?** Hoy `scripts/01...py`
-   registra errores en `download_status.csv` y continúa. ¿Conviene
-   añadir un modo `--retry-errors` que recorra solo las filas con
-   `status="error"` y reintente?
-2. **¿`scale_pos_weight` manual para XGBoost multiclase?** XGBoost no
-   expone `class_weight="balanced"` para multiclase. Una opción es pasar
-   `sample_weight = compute_sample_weight("balanced", y_train)` en
-   `fit`. Esto rompe la interfaz uniforme con sklearn pero podría dar
-   un boost en recall de clases minoritarias.
-3. **¿`SGDClassifier(loss="hinge")` además de LinearSVC?** Más rápido
-   con dataset grande, soporta `partial_fit` para online learning. ¿Vale
-   añadirlo al registro?
-4. **¿Filtrado pasa-banda antes de features?** Sin él, las features
-   estadísticas están contaminadas por baseline wander y ruido de red.
-   ¿Aceptable añadirlo como un step adicional dentro del Pipeline o se
-   prefiere como preprocesamiento offline en `scripts/02...py`?
-5. **¿Persistir el mejor estimador a disco?** Hoy no se guarda; cada
-   notebook/script lo regenera. ¿Se quiere `joblib.dump` del
-   `best_estimator_` global en `models/` (ignorado por git)?
-6. **¿Reporte intermedio sobre folds de CV?** Hoy se guarda solo el
-   promedio del mejor candidato. Si interesa la varianza, se puede
-   guardar el dataframe completo de `cv_results_` por modelo.
+1. **¿Aumentar `--n-iter` para full run, o ya es suficiente con 30?** Con 6
+   modelos × 30 iter × 5 folds = 900 fits sobre 510k filas, el costo es
+   significativo. ¿Vale 50? ¿100?
+2. **¿Encoding de `dx` / `opname`?** Hoy descartadas por alta cardinalidad.
+   ¿Probar target encoding por fold? ¿Embeddings de texto preentrenados
+   (off-scope clínico)?
+3. **¿Persistir el `best_estimator_` con `joblib`?** Hoy se vuelve a
+   ajustar en cada corrida; persistirlo aceleraría inferencia.
+4. **¿Manejo de desbalance más allá de `class_weight`?** ¿Probar
+   `imbalanced-learn` (SMOTE, BalancedRandomForest, BalancedBagging)?
+5. **¿Reintroducir el flujo ECG crudo como complemento?** Ahora que el
+   tabular está estable, ¿vale la pena reactivar las features ECG para
+   un ensemble?
+6. **¿Reportar varianza entre folds además del promedio?**
 
 ---
 
 ## 7. Recomendación concreta para la siguiente instrucción
 
-**El bloqueante principal es la cohorte: 3 casos no permiten estimar
-generalización**. El siguiente paso debería ser uno de estos dos
-caminos, y conviene decidir cuál antes de pedir trabajo nuevo.
+**Path A — Full run sobre los 482 cases**
 
-### Camino A — Descargar todo y correr el full search
+```
+Ejecuta:
+  python scripts/03_run_tabular_hyperparameter_search.py --n-iter 30 --n-splits 5
 
-Costo: descarga lenta (~480 casos × tiempo variable por caso) + run
-largo de la búsqueda (~`30 × 6 × 3 × 5 = 2700` fits, varias horas según
-hardware).
+Tiempo estimado: varias horas según hardware. Revisa al final
+reports/tables/tabular_model_comparison_test.csv y actualiza
+reports/TABULAR_MODELING_REPORT.md con las cifras del full run
+sustituyendo las del debug.
+```
 
-Instrucción sugerida para la siguiente iteración:
+**Path B — Mejora del feature engineering antes del full run**
 
-> "Ejecuta `python scripts/01_download_all_available_ecg.py`. Revisa
-> `reports/tables/download_status.csv` y reporta cuántos casos quedaron
-> en `status="error"`. Luego ejecuta `python scripts/02_build_features_all_windows.py`
-> sin `--debug`. Finalmente ejecuta
-> `python scripts/03_run_hyperparameter_search.py --n-iter 30 --n-splits 5`.
-> Cuando termine, sustituye las cifras del `MODELING_REPORT.md` con las
-> del full run y elimina las notas de modo `--debug`."
+```
+Añade a scripts/02_build_filtered_tabular_modeling_dataset.py:
+  * mean/std/rmssd de RR sobre ventana móvil de N latidos por caso
+    (con N parametrizable; default N=20)
+  * codificación numérica de `dx` / `opname` por target encoding
+    estimado SOLO en train tras el split externo (fit fuera del
+    pipeline interno para evitar fuga)
+Luego corre nuevamente la búsqueda en debug y full.
+```
 
-### Camino B — Refinar el pipeline antes del full run
+**Path C — Persistir el modelo y construir un script de inferencia**
 
-Costo: bajo en cómputo, alto en código. Permite que el full run incluya
-mejores features.
+```
+Tras el full run, persiste el mejor estimator con joblib.dump en
+models/best_tabular.joblib (ignorado por git). Crea un script
+scripts/04_predict_tabular.py que cargue ese modelo y prediga sobre
+un nuevo parquet con las mismas columnas.
+```
 
-Instrucción sugerida:
+### Mi recomendación inicial
 
-> "Antes de correr la cohorte completa, añade un step de filtrado
-> pasa-banda 0.5–40 Hz en `scripts/02_build_features_all_windows.py`
-> usando `scipy.signal.butter` + `filtfilt`. Añade tres features
-> espectrales por ventana (energía en [0–5 Hz], [5–15 Hz], [15–40 Hz])
-> con `scipy.signal.welch`. Implementa también detección simple de pico
-> R por ventana y deriva amplitud y polaridad. Actualiza los tests."
-
-### Mi recomendación
-
-Iría por **Camino A** primero. Las features actuales ya son útiles para
-calibrar el orden relativo de los modelos; el cuello de botella
-metodológico ahora es la cantidad de casos, no la calidad de las
-features. Después del full run, decidir features con datos reales sobre
-la mesa.
+**Path A** primero (es la corrida limpia que esta iteración prometió y
+todavía no se ha hecho), seguido de **Path C** si Path A da un baseline
+razonable. **Path B** queda como mejora futura de feature engineering.
 
 ---
 
-## Apéndice — Comandos útiles para verificar el handoff
+## Apéndice — Comandos de verificación
 
 ```bash
 # Tests
 python -m pytest tests/ -q
 
-# Reproducir la corrida documentada
-python scripts/03_run_hyperparameter_search.py --debug
-
-# Solo un modelo, una ventana
-python scripts/03_run_hyperparameter_search.py --debug --models xgboost --windows 5.0
-
-# Inspeccionar resultados
-python -c "import pandas as pd; print(pd.read_csv('reports/tables/full_model_comparison.csv').round(3).to_string(index=False))"
-
-# Verificar que no haya features prohibidas en los parquets
+# Verificar que el dataset no contiene columnas prohibidas como features
 python -c "
 import pandas as pd
-from src.modeling import assert_no_forbidden_features
-from src.config import FORBIDDEN_FEATURE_COLUMNS
-for w in ['1p2s','2p0s','5p0s']:
-    df = pd.read_parquet(f'data/processed/features_w{w}.parquet')
-    forbidden_in_df = [c for c in FORBIDDEN_FEATURE_COLUMNS if c in df.columns]
-    print(f'{w}: columnas {len(df.columns)}; prohibidas presentes (esperado, no se usan como features): {forbidden_in_df}')
+from src.tabular_search import classify_features
+df = pd.read_parquet('data/processed/filtered_tabular_modeling_dataset.parquet')
+cls = classify_features(df)
+forbidden = {'beat_type','rhythm_label','case_id','rhythm_classes','bad_signal_quality','bad_signal_quality_label','subjectid','death_inhosp','icu_days','adm','dis'}
+for c in forbidden:
+    assert c not in cls['numeric_features'] and c not in cls['categorical_features'], c
+print('OK: ninguna columna prohibida en features.')
+"
+
+# Inspeccionar resultados de la última corrida
+python -c "
+import pandas as pd
+print(pd.read_csv('reports/tables/tabular_model_comparison_test.csv').round(3).to_string(index=False))
 "
 ```

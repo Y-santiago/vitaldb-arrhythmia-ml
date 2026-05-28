@@ -1,4 +1,20 @@
-"""Búsqueda de hiperparámetros multi-modelo y multi-ventana.
+"""[LEGACY — pipeline exploratorio ECG crudo, pausado en esta fase]
+
+Búsqueda de hiperparámetros multi-modelo y multi-ventana sobre features
+derivadas de señal ECG cruda (ventaneo + estadísticas temporales + RR).
+
+ESTADO: línea exploratoria histórica. NO se usa como flujo principal de
+modelado en la fase actual. Para el flujo activo, ver
+``src/tabular_search.py`` (modelado tabular sobre anotaciones + metadata
+filtradas, sin descarga ni ventaneo de ECG).
+
+Razón del pausado: con la cohorte real disponible y el tiempo de descarga
+de los 482 ECG desde VitalDB, el flujo basado en señal cruda no era viable
+para entregar un baseline reproducible en plazo razonable. El flujo
+tabular se construye únicamente sobre lo que ya está en disco bajo
+``data/raw/physionet_annotations/`` y no necesita VitalDB en runtime.
+
+------------------------------------------------------------------------
 
 Este módulo orquesta el pipeline completo de modelado:
     1. Carga el parquet de features de un tamaño de ventana dado.

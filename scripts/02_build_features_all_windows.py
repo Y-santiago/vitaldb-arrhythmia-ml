@@ -1,4 +1,12 @@
-"""Genera parquets de features por tamaño de ventana (1.2 / 2.0 / 5.0 s).
+"""[LEGACY — pipeline exploratorio ECG crudo, pausado en esta fase]
+
+Para el flujo activo de modelado, ver
+``scripts/02_build_filtered_tabular_modeling_dataset.py`` (tabular sin
+ventaneo de señal). Este script se conserva como referencia histórica.
+
+------------------------------------------------------------------------
+
+Genera parquets de features por tamaño de ventana (1.2 / 2.0 / 5.0 s).
 
 Para cada `case_<id>.npy` cacheado en `data/raw/vitaldb_waveforms/`:
     1. Carga sus anotaciones desde `data/raw/physionet_annotations/`.

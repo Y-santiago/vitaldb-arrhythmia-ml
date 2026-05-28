@@ -1,4 +1,13 @@
-"""Descarga todos los ECG faltantes desde VitalDB.
+"""[LEGACY — descarga de ECG crudo desde VitalDB, pausada en esta fase]
+
+Este script no es parte del flujo de modelado actual, que es **tabular** y
+solo usa anotaciones y metadata ya presentes en
+``data/raw/physionet_annotations/``. El script se conserva por si más
+adelante se reactiva la línea de ECG crudo.
+
+------------------------------------------------------------------------
+
+Descarga todos los ECG faltantes desde VitalDB.
 
 Recorre `metadata.csv`, identifica qué `case_id` ya están cacheados como
 `data/raw/vitaldb_waveforms/case_<id>.npy` y descarga únicamente los

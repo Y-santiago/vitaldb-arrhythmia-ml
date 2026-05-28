@@ -1,4 +1,11 @@
-"""CLI: corre la búsqueda de hiperparámetros multi-modelo y multi-ventana.
+"""[LEGACY — búsqueda sobre features ECG, pausada en esta fase]
+
+Para el flujo activo, ver
+``scripts/03_run_tabular_hyperparameter_search.py``.
+
+------------------------------------------------------------------------
+
+CLI: corre la búsqueda de hiperparámetros multi-modelo y multi-ventana.
 
 Lee los parquets de features (``features_w1p2s.parquet``, ``features_w2p0s.parquet``,
 ``features_w5p0s.parquet``), hace split 80/20 por ``case_id`` con cobertura

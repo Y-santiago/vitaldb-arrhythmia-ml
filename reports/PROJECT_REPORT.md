@@ -1,25 +1,60 @@
 # Informe del proyecto — VitalDB Arrhythmia ML
 
-**Fecha del informe:** 2026-05-19
+**Fecha del informe:** 2026-05-27
 **Rama:** `main`
-**Commits relevantes:** `f5140f2` → `6657569` → `5d296e8`
+**Commits relevantes hasta este informe:** `f5140f2` → `6657569` → `5d296e8` →
+`3b22cab` → (commit de la iteración tabular).
+
+---
+
+## 0. Pivot metodológico (iteración tabular, 2026-05-27)
+
+A partir de esta iteración el proyecto pasa de “clasificación desde
+segmentos de ECG crudo” a “**clasificación multiclase de `rhythm_label`
+usando datos tabulares filtrados de anotaciones y metadatos del dataset
+VitalDB Arrhythmia**”. El nuevo flujo:
+
+- usa los 482 archivos de anotaciones y `metadata.csv` ya en disco;
+- **no** descarga señal ECG desde VitalDB;
+- **no** construye ventanas de señal;
+- une anotaciones + metadata por `case_id`;
+- añade features temporales locales por latido (`rr_prev`, `rr_next`,
+  `hr_inst_from_rr_prev`, `position_in_case`);
+- aplica `ColumnTransformer(Imputer+Scaler / Imputer+OneHotEncoder)`;
+- corre `RandomizedSearchCV` con CV por grupo sobre 6 modelos.
+
+La línea ECG cruda anterior (notebooks `03–05`, `06_full_...ipynb`,
+módulos `src/search.py`, scripts ECG) queda marcada como `legacy` con
+banner explícito en cada archivo. No se elimina; se preserva como
+referencia histórica.
+
+Reporte específico de la fase tabular: `reports/TABULAR_MODELING_REPORT.md`.
+Reporte específico de la fase legacy ECG: `reports/MODELING_REPORT.md`.
+Estado para handoff: `reports/NEXT_STEPS_FOR_CHATGPT.md`.
 
 ---
 
 ## 1. Resumen ejecutivo
 
 Proyecto académico y exploratorio de machine learning para la clasificación
-de ritmos cardíacos (`rhythm_label`) a partir de segmentos temporales de ECG
-intraoperatorio. Fuente de datos: *VitalDB Arrhythmia Database 1.0.0*
-(PhysioNet) para anotaciones y metadata, y VitalDB para la señal ECG cruda.
+multiclase de `rhythm_label` sobre datos tabulares filtrados del dataset
+*VitalDB Arrhythmia Database 1.0.0* (PhysioNet).
 
-El alcance actual cubre exclusivamente la **Fase 1 exploratoria**: estructura
-del repositorio, carga y validación de datos, EDA de anotaciones, ventaneo
-alrededor de cada latido, features iniciales y un baseline de clasificación
-con validación por grupo (`case_id`).
+A la fecha del informe el repositorio tiene:
 
-No se reportan métricas finales: el baseline existe únicamente para validar la
-mecánica del pipeline y diagnosticar problemas estructurales del split.
+- Pipeline de auditoría + construcción + búsqueda de hiperparámetros
+  reproducible vía scripts CLI.
+- Notebook interactivo equivalente (`notebooks/06_tabular_modeling_hyperparameter_search.ipynb`).
+- Cobertura de tests sobre split por grupo, bloqueo de columnas
+  prohibidas, preprocesamiento tabular y estructura de tablas de
+  resultados (84 tests verdes).
+- Reportes y CSVs/PNGs persistidos en `reports/` para cada corrida.
+
+No se reportan métricas “finales”: la búsqueda se ejecuta tanto en modo
+`--debug` (subset de cases) como en modo completo; los CSVs reflejan la
+corrida más reciente. Cualquier comparación debe consultar el
+`tabular_hyperparameter_search_meta.json` para saber qué `n_iter`,
+`n_splits` y `max_cases` se usaron.
 
 ---
 
@@ -374,15 +409,95 @@ Tareas abiertas de modelado (para fases posteriores):
 ## 11. Trazabilidad
 
 - **Repositorio:** privado en GitHub (rama `main`).
-- **Commits actuales:**
+- **Commits hasta la fecha:**
   - `f5140f2` — Initial project structure for ECG rhythm classification
   - `6657569` — Fix annotation loading: derive case_id from filename and
     rename beat_time to time_second
   - `5d296e8` — Rework baseline modeling: full Pipeline + group-aware
     validation
-- **Tests:** ejecutables con `pytest tests/`. Cobertura por módulo
-  detallada en §5.3.
+  - `3b22cab` — Add modeling and hyperparameter search infrastructure
+    (línea ECG completa, hoy `legacy`)
+  - *(commit de la iteración tabular)* — Pivot a modelado tabular
+    sobre anotaciones + metadata; ECG marcado `legacy`.
+- **Tests:** ejecutables con `pytest tests/`. 84 tests verdes a la fecha
+  (64 previos + 20 nuevos en `tests/test_tabular_search.py`).
 - **Reproducibilidad:** semilla por defecto en `config.RANDOM_SEED = 42`.
-  Aplicada en notebooks vía `set_seed`.
+  Aplicada en scripts y notebooks vía `set_seed`.
 - **Datos:** ninguno versionado. Las rutas reales se construyen desde
   `config.PROJECT_ROOT` (rutas relativas).
+
+---
+
+## 12. Iteración tabular (2026-05-27)
+
+Nueva fase. Reemplaza al baseline ECG como flujo principal.
+
+### 12.1 Nuevos componentes
+
+| Path | Propósito |
+|---|---|
+| `scripts/01_audit_filtered_tabular_dataset.py` | Audita anotaciones+metadata. Produce `tabular_dataset_audit.csv`, `tabular_class_distribution.csv`, `tabular_cases_per_class.csv`, `tabular_missing_values.csv`, `tabular_columns_classification.csv`. |
+| `scripts/02_build_filtered_tabular_modeling_dataset.py` | Construye `data/processed/filtered_tabular_modeling_dataset.parquet`. Coerce `age` (`>89 → 89`), añade RR locales, descarta constantes. |
+| `scripts/03_run_tabular_hyperparameter_search.py` | CLI de `RandomizedSearchCV` multi-modelo. Acepta `--debug`, `--max-cases`, `--models`, `--n-iter`, `--n-splits`. |
+| `src/tabular_search.py` | Registro de modelos, classify_features, build_pipeline_for_model, run_search_for_model, evaluate_on_test, extract_feature_importance. Incluye wrapper `_XGBClassifierSafe`. |
+| `src/preprocessing.build_tabular_preprocessor` | `ColumnTransformer(Imputer+Scaler / Imputer+OneHotEncoder(handle_unknown='ignore'))`. |
+| `src/modeling.make_train_test_group_split_with_coverage` | 80/20 por `case_id` con cobertura de clases (reuso de la iteración previa). |
+| `notebooks/06_tabular_modeling_hyperparameter_search.ipynb` | Notebook interactivo. |
+| `tests/test_tabular_search.py` | 20 tests sobre clasificación de columnas, bloqueo de prohibidas, split, preprocesador, estructura de pipelines. |
+| `reports/TABULAR_MODELING_REPORT.md` | Informe técnico del flujo tabular. |
+| `reports/NEXT_STEPS_FOR_CHATGPT.md` | Handoff actualizado. |
+
+### 12.2 Decisiones de leakage
+
+`src/config.py::TABULAR_LEAKAGE_COLUMNS` excluye del set de predictores:
+`rhythm_label`, `beat_type`, `rhythm_classes`, `bad_signal_quality`,
+`bad_signal_quality_label`, `case_id`, `caseid` (variante con typo del
+archivo 2453), `subjectid`, `source_file`, `icu_days`, `death_inhosp`,
+`adm`, `dis`.
+
+### 12.3 Auditoría del dataset (cifras reales y reproducibles)
+
+| métrica | valor |
+|---|---:|
+| filas antes filtros | 676 250 |
+| filas después filtros | 639 460 |
+| cases antes / después | 482 / 482 |
+| n clases | 10 |
+| numéricas candidatas | 54 |
+| categóricas candidatas | 17 |
+| excluidas por leakage | 11 |
+| excluidas por alta cardinalidad | 3 (`dx`, `opname`, `age` antes de coerción) |
+
+Distribución global de clases (`reports/tables/tabular_class_distribution.csv`):
+N (61 %), AFIB/AFL (25 %), Patterned Ventricular Ectopy (3.7 %), SND
+(3.5 %), Patterned Atrial Ectopy (3.1 %), WAP/MAT (1.6 %), SVTA (1.0 %),
+AVB (0.7 %), VT (0.2 %), Unclassifiable (0.01 %).
+
+### 12.4 Split sobre dataset completo
+
+Con `random_state=42`, primer intento exitoso:
+- 10 / 10 clases cubiertas en train y test.
+- 385 cases en train (510 287 filas) / 97 cases en test (129 173 filas).
+- `actual_test_fraction = 0.202`.
+
+### 12.5 Estado de la corrida
+
+El CLI produce todos los CSVs/PNGs requeridos en `reports/tables/` y
+`reports/figures/`. La corrida que persistió las cifras de la última
+sección 5 del `TABULAR_MODELING_REPORT.md` es la documentada en
+`reports/tables/tabular_hyperparameter_search_meta.json` (consultar
+`args.n_iter`, `args.n_splits`, `args.max_cases`, `args.debug` antes de
+interpretar).
+
+### 12.6 Línea ECG (legacy)
+
+Banner `[LEGACY]` añadido en:
+- `src/search.py`
+- `scripts/01_download_all_available_ecg.py`
+- `scripts/02_build_features_all_windows.py`
+- `scripts/03_run_hyperparameter_search.py`
+
+Los notebooks `03-05` y `06_full_modeling_hyperparameter_search.ipynb`
+quedan disponibles para inspección histórica. Los `.npy` (case_1001,
+case_1002, case_1018) cacheados en `data/raw/vitaldb_waveforms/` no se
+usan en el flujo activo.

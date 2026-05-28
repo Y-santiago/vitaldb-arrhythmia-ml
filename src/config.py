@@ -83,3 +83,42 @@ DEFAULT_N_SPLITS: int = 5
 # Nombre del canal ECG por defecto a solicitar a VitalDB.
 # El identificador exacto debe confirmarse al cargar la primera señal.
 DEFAULT_ECG_TRACK_NAME: str = "SNUADC/ECG_II"
+
+# ---------------------------------------------------------------------------
+# Modelado tabular (flujo activo desde la iteración tabular)
+# ---------------------------------------------------------------------------
+# Columnas que NUNCA pueden entrar al set de features predictoras:
+#   * el target o su codificación;
+#   * `beat_type` (regla metodológica del proyecto);
+#   * el identificador del caso (se usa solo como grupo);
+#   * filtros (`bad_signal_quality*`);
+#   * outcomes post-operatorios (fuga temporal);
+#   * timestamps administrativos.
+TABULAR_LEAKAGE_COLUMNS: tuple[str, ...] = (
+    TARGET_COLUMN,            # rhythm_label
+    BEAT_TYPE_COLUMN,         # beat_type — prohibido como predictor
+    "rhythm_classes",         # contiene la lista de ritmos del caso → leakage directo
+    SIGNAL_QUALITY_COLUMN,    # bad_signal_quality (filtro)
+    "bad_signal_quality_label",  # texto descriptivo del filtro
+    CASE_ID_COLUMN,           # case_id — solo se usa como grupo
+    "caseid",                 # variante con typo en un archivo (Annotation_file_2453) — alias del id
+    "subjectid",              # identificador alternativo del paciente
+    "source_file",            # identificador del archivo origen
+    "icu_days",               # estancia en UCI post-op (outcome posterior)
+    "death_inhosp",           # mortalidad intra-hospitalaria (outcome posterior)
+    "adm",                    # timestamp administrativo
+    "dis",                    # timestamp administrativo (egreso)
+)
+
+# Umbral de cardinalidad para considerar una columna como categórica
+# elegible. Variables categóricas por encima de este límite quedan fuera
+# del set inicial para evitar explosión dimensional de OneHotEncoder.
+TABULAR_MAX_CATEGORY_CARDINALITY: int = 30
+
+# Mínima frecuencia (en filas) que debe tener una categoría para mantener
+# su propia columna en OneHotEncoder. El resto va a la categoría
+# `infrequent_sklearn` automáticamente.
+TABULAR_OHE_MIN_FREQUENCY: int = 50
+
+# Nombre del parquet de salida del flujo tabular.
+TABULAR_DATASET_FILENAME: str = "filtered_tabular_modeling_dataset.parquet"
