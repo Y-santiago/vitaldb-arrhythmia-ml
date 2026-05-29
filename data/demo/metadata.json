@@ -1,0 +1,29 @@
+{
+  "nsr": {
+    "display_label": "Ritmo sinusal normal",
+    "rhythm_label": "N",
+    "case_id": 3625,
+    "fs": 500,
+    "n_samples": 5000,
+    "nan_pct": 0.0,
+    "filename": "nsr.csv"
+  },
+  "afib": {
+    "display_label": "Fibrilacion auricular",
+    "rhythm_label": "AFIB/AFL",
+    "case_id": 1738,
+    "fs": 500,
+    "n_samples": 5000,
+    "nan_pct": 0.0,
+    "filename": "afib.csv"
+  },
+  "vt": {
+    "display_label": "Taquicardia ventricular",
+    "rhythm_label": "VT",
+    "case_id": 3631,
+    "fs": 500,
+    "n_samples": 5000,
+    "nan_pct": 0.0,
+    "filename": "vt.csv"
+  }
+}

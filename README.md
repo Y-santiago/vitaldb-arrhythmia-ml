@@ -320,3 +320,4 @@ git push -u origin main
 
 Antes de hacer `push`, verifica nuevamente con `git status` que **no** se
 estén incluyendo archivos de `data/`, `models/`, ni binarios pesados.
+streamlit run frontend\app\app.py

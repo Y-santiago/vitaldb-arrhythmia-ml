@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pipeline del proyecto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     PALETA / TOKENS
+     ============================================================ */
+  :root {
+    --bg:        #07090f;
+    --bg-soft:   #0a0d16;
+    --card:      #0d1220;
+    --card-2:    #11172a;
+    --line:      #1c2435;
+    --line-soft: #161d2c;
+
+    --blue:   #4a8cff;
+    --cyan:   #22d3ee;
+    --green:  #22c55e;
+    --amber:  #f59e0b;
+    --red:    #ef4444;
+
+    --text:   #f1f5fb;
+    --muted:  #94a3b8;
+    --faint:  #5b6679;
+
+    --r:      16px;
+    --r-sm:   10px;
+
+    --font:   "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono:   "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 40px 28px 48px;
+    /* sutil viñeta de fondo médico/tecnológico */
+    background:
+      radial-gradient(900px 380px at 50% -120px, rgba(74,140,255,0.10), transparent 70%),
+      radial-gradient(700px 500px at 85% 120%, rgba(34,211,238,0.05), transparent 70%);
+  }
+
+  /* ============================================================
+     HEADER
+     ============================================================ */
+  .header { position: relative; margin-bottom: 44px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--faint);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .eyebrow .tab {
+    color: var(--cyan);
+    border: 1px solid rgba(34,211,238,0.35);
+    background: rgba(34,211,238,0.08);
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+  }
+
+  .header h1 {
+    font-size: clamp(28px, 4.4vw, 42px);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0 0 12px;
+  }
+  .header h1 .accent {
+    background: linear-gradient(90deg, var(--blue), var(--cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .header .subtitle {
+    font-size: clamp(15px, 1.8vw, 17px);
+    color: var(--muted);
+    max-width: 620px;
+    line-height: 1.5;
+    margin: 0 0 22px;
+  }
+
+  /* línea ECG decorativa */
+  .ecg {
+    width: 100%;
+    height: 34px;
+    margin: 6px 0 22px;
+    display: block;
+    opacity: 0.7;
+  }
+  .ecg path { fill: none; stroke: var(--cyan); stroke-width: 1.6; }
+  .ecg .base { stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 6; }
+
+  .badges { display: flex; flex-wrap: wrap; gap: 10px; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--muted);
+  }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .badge.b-vitaldb { border-color: rgba(74,140,255,0.35); color: #bcd3ff; }
+  .badge.b-vitaldb .dot { background: var(--blue); }
+  .badge.b-ecg { border-color: rgba(34,211,238,0.35); color: #b7f0fa; }
+  .badge.b-ecg .dot { background: var(--cyan); }
+  .badge.b-ml { border-color: rgba(34,197,94,0.35); color: #b6f0c9; }
+  .badge.b-ml .dot { background: var(--green); }
+  .badge.b-warn {
+    border-color: rgba(239,68,68,0.4);
+    color: #fbc4c4;
+    background: rgba(239,68,68,0.06);
+  }
+  .badge.b-warn .dot { background: var(--red); }
+
+  /* ============================================================
+     MAIN PROCESS MAP  (roadmap vertical zig-zag con espina central)
+     ============================================================ */
+  .timeline {
+    position: relative;
+    padding: 6px 0;
+  }
+  /* espina central */
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg,
+      rgba(74,140,255,0.0) 0%,
+      var(--blue) 8%,
+      var(--cyan) 50%,
+      var(--green) 92%,
+      rgba(34,197,94,0.0) 100%);
+    opacity: 0.5;
+  }
+
+  .step {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 72px 1fr;
+    align-items: center;
+    padding: 14px 0;
+  }
+
+  /* marcador numerado sobre la espina */
+  .marker {
+    grid-column: 2;
+    justify-self: center;
+    z-index: 3;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--card);
+    border: 1.5px solid var(--ac);
+    box-shadow: 0 0 0 5px var(--bg), 0 0 22px -4px var(--ac);
+  }
+
+  /* tarjeta de nodo */
+  .card {
+    position: relative;
+    background: linear-gradient(180deg, var(--card-2), var(--card));
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 16px 18px;
+    box-shadow: 0 14px 30px -20px rgba(0,0,0,0.9);
+    transition: transform 0.18s ease, border-color 0.18s ease;
+  }
+  .card:hover { transform: translateY(-2px); border-color: var(--ac); }
+
+  .step.left  .card { grid-column: 1; }
+  .step.right .card { grid-column: 3; }
+
+  /* conector tarjeta -> espina */
+  .card::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 26px;
+    height: 2px;
+    background: var(--ac);
+    opacity: 0.55;
+  }
+  .step.left  .card::after { right: -27px; transform: translateY(-50%); }
+  .step.right .card::after { left: -27px; transform: translateY(-50%); }
+
+  .card-head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-bottom: 8px;
+  }
+  .step.left .card-head { flex-direction: row-reverse; text-align: right; }
+  .step.left .card-body { text-align: right; }
+
+  .icon {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--r-sm);
+    display: grid;
+    place-items: center;
+    background: color-mix(in oklab, var(--ac) 16%, transparent);
+    border: 1px solid color-mix(in oklab, var(--ac) 40%, transparent);
+    color: var(--ac);
+  }
+  .icon svg { width: 20px; height: 20px; }
+
+  .card h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    flex: 1;
+  }
+  .card .kicker {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-bottom: 2px;
+  }
+  .card p {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+
+  /* ============================================================
+     SECONDARY EVALUATION BRANCH (3 mini nodos)
+     ============================================================ */
+  .branch {
+    position: relative;
+    margin: 4px 0 8px;
+    padding: 26px 0 8px;
+  }
+  /* conector punteado bajando desde la espina (Evaluación) */
+  .branch::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -10px;
+    height: 34px;
+    width: 0;
+    border-left: 2px dashed var(--line);
+    transform: translateX(-50%);
+  }
+  .branch-label {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .branch-label span {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+    background: var(--bg-soft);
+    border: 1px solid var(--line-soft);
+    border-radius: 999px;
+    padding: 5px 12px;
+  }
+  .branch-label span b { color: var(--cyan); font-weight: 500; }
+
+  .mini-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .mini {
+    background: var(--bg-soft);
+    border: 1px dashed var(--line);
+    border-radius: var(--r-sm);
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .mini .m-icon {
+    flex: 0 0 auto;
+    width: 26px; height: 26px;
+    border-radius: 7px;
+    display: grid; place-items: center;
+    color: var(--faint);
+    background: var(--card);
+    border: 1px solid var(--line-soft);
+  }
+  .mini .m-icon svg { width: 15px; height: 15px; }
+  .mini span {
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.3;
+  }
+
+  /* ============================================================
+     FOOTER / CALLOUT
+     ============================================================ */
+  .footer {
+    margin-top: 30px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background:
+      linear-gradient(180deg, rgba(74,140,255,0.05), transparent),
+      var(--card);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .footer .flow {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+  .footer .flow b { color: var(--text); font-weight: 500; }
+  .footer .flow .arr { color: var(--blue); }
+  .footer .pill {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: #fbc4c4;
+    border: 1px solid rgba(239,68,68,0.4);
+    background: rgba(239,68,68,0.07);
+    padding: 6px 12px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  /* ============================================================
+     RESPONSIVE  (Streamlit columnas angostas -> espina a la izquierda)
+     ============================================================ */
+  @media (max-width: 680px) {
+    .timeline::before { left: 23px; }
+    .step { grid-template-columns: 46px 1fr; column-gap: 18px; padding: 10px 0; }
+    .marker { grid-column: 1; }
+    .step.left .card, .step.right .card { grid-column: 2; }
+    .step.left .card-head { flex-direction: row; text-align: left; }
+    .step.left .card-body { text-align: left; }
+    .step.left .card::after, .step.right .card::after { left: -19px; right: auto; }
+    .branch::before { left: 23px; }
+    .mini-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============================================================
+       HEADER
+       ============================================================ -->
+  <header class="header">
+    <div class="eyebrow">
+      <span class="tab">02 · Pipeline del proyecto</span>
+      <span>Overview metodológico</span>
+    </div>
+
+    <h1>Pipeline del <span class="accent">proyecto</span></h1>
+    <p class="subtitle">
+      De señales ECG intraoperatorias a una app académica de clasificación
+      multiclase de ritmos.
+    </p>
+
+    <!-- línea ECG decorativa -->
+    <svg class="ecg" viewBox="0 0 900 34" preserveAspectRatio="none" aria-hidden="true">
+      <path class="base" d="M0 17 H900" />
+      <path d="M0 17 H120 l10 0 l8 -11 l9 22 l8 -28 l9 28 l7 -11 H300
+               l10 0 l8 -11 l9 22 l8 -28 l9 28 l7 -11 H520
+               l10 0 l8 -11 l9 22 l8 -28 l9 28 l7 -11 H740 l10 0 l8 -11 l9 22 l8 -28 l9 28 l7 -11 H900" />
+    </svg>
+
+    <div class="badges">
+      <span class="badge b-vitaldb"><span class="dot"></span>VitalDB</span>
+      <span class="badge b-ecg"><span class="dot"></span>ECG</span>
+      <span class="badge b-ml"><span class="dot"></span>Machine Learning</span>
+      <span class="badge b-warn"><span class="dot"></span>Demo académica · No uso clínico</span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       MAIN PROCESS MAP  (7 nodos conectados)
+       ============================================================ -->
+  <section class="timeline" aria-label="Mapa del pipeline">
+
+    <!-- NODO 1 · Problema -->
+    <article class="step left" style="--ac: var(--red);">
+      <div class="card">
+        <div class="card-head">
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg>
+          </div>
+          <h3><span class="kicker">Nodo 01</span>Problema</h3>
+        </div>
+        <div class="card-body"><p>Clasificación multiclase de ritmos intraoperatorios a partir de ECG.</p></div>
+      </div>
+      <div class="marker">1</div>
+    </article>
+
+    <!-- NODO 2 · Datos VitalDB -->
+    <article class="step right" style="--ac: var(--blue);">
+      <div class="marker">2</div>
+      <div class="card">
+        <div class="card-head">
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+          </div>
+          <h3><span class="kicker">Nodo 02</span>Datos VitalDB</h3>
+        </div>
+        <div class="card-body"><p>Señales ECG, anotaciones por latido y etiquetas de ritmo.</p></div>
+      </div>
+    </article>
+
+    <!-- NODO 3 · Preprocesamiento ECG -->
+    <article class="step left" style="--ac: var(--cyan);">
+      <div class="card">
+        <div class="card-head">
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2-7 4 14 2-9 2 4h6"/></svg>
+          </div>
+          <h3><span class="kicker">Nodo 03</span>Preprocesamiento ECG</h3>
+        </div>
+        <div class="card-body"><p>Interpolación, remuestreo, filtro 0.5–40 Hz y normalización.</p></div>
+      </div>
+      <div class="marker">3</div>
+    </article>
+
+    <!-- NODO 4 · Features -->
+    <article class="step right" style="--ac: var(--amber);">
+      <div class="marker">4</div>
+      <div class="card">
+        <div class="card-head">
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><circle cx="9" cy="7" r="2.4"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="15" cy="17" r="2.4"/></svg>
+          </div>
+          <h3><span class="kicker">Nodo 04</span>Features</h3>
+        </div>
+        <div class="card-body"><p>Extracción de variables de ritmo, RR, energía y morfología.</p></div>
+      </div>
+    </article>
+
+    <!-- NODO 5 · Modelos -->
+    <article class="step left" style="--ac: var(--blue);">
+      <div class="card">
+        <div class="card-head">
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="8" height="8" rx="1.5"/><path d="M9 4v2M15 4v2M9 18v2M15 18v2M4 9h2M4 15h2M18 9h2M18 15h2"/></svg>
+          </div>
+          <h3><span class="kicker">Nodo 05</span>Modelos</h3>
+        </div>
+        <div class="card-body"><p>Comparación entre LinearSVC, árboles, Random Forest, XGBoost y MLP.</p></div>
+      </div>
+      <div class="marker">5</div>
+    </article>
+
+    <!-- NODO 6 · Evaluación  (origen de la rama secundaria) -->
+    <article class="step right" style="--ac: var(--green);">
+      <div class="marker">6</div>
+      <div class="card">
+        <div class="card-head">
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.8" fill="currentColor"/></svg>
+          </div>
+          <h3><span class="kicker">Nodo 06</span>Evaluación</h3>
+        </div>
+        <div class="card-body"><p>F1-macro, precisión, recall, matriz de confusión y análisis por clase.</p></div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============================================================
+       SECONDARY EVALUATION BRANCH (3 mini nodos · desde Evaluación)
+       ============================================================ -->
+  <section class="branch" aria-label="Rama de análisis de evaluación">
+    <div class="branch-label"><span>Análisis detallado &middot; desde <b>Evaluación</b></span></div>
+    <div class="mini-grid">
+      <div class="mini">
+        <div class="m-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="18" y1="20" x2="18" y2="14"/></svg></div>
+        <span>Métricas por clase</span>
+      </div>
+      <div class="mini">
+        <div class="m-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="1.5"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="12" y1="4" x2="12" y2="20"/></svg></div>
+        <span>Matriz de confusión</span>
+      </div>
+      <div class="mini">
+        <div class="m-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/></svg></div>
+        <span>Interpretabilidad</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       NODO 7 · App Streamlit  (cierre del flujo principal)
+       ============================================================ -->
+  <section class="timeline" style="padding-top:0;">
+    <div style="position:absolute; left:50%; top:-2px; height:34px; width:0; border-left:2px solid var(--line); transform:translateX(-50%);"></div>
+    <article class="step left" style="--ac: var(--cyan);">
+      <div class="card">
+        <div class="card-head">
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.5"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
+          </div>
+          <h3><span class="kicker">Nodo 07</span>App Streamlit</h3>
+        </div>
+        <div class="card-body"><p>Visualización del proyecto, resultados y demo ECG.</p></div>
+      </div>
+      <div class="marker">7</div>
+    </article>
+  </section>
+
+  <!-- ============================================================
+       FOOTER / CALLOUT
+       ============================================================ -->
+  <footer class="footer">
+    <div class="flow">
+      <b>ECG</b><span class="arr">→</span><b>Preproceso</b><span class="arr">→</span><b>Features</b><span class="arr">→</span><b>Modelos</b><span class="arr">→</span><b>App</b>
+    </div>
+    <span class="pill">Demo académica · No uso clínico</span>
+  </footer>
+
+</div>
+</body>
+</html>

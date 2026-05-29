@@ -1,14 +1,8 @@
 import streamlit as st
 
-st.set_page_config(
-    page_title="ECG · Conclusiones",
-    page_icon="🫀",
-    layout="wide",
-)
-
 import pandas as pd
 
-from components.layout import inject_css, sidebar_branding, page_header
+from components.layout import page_header
 from components.cards import callout, card_header, kv_table, metric_card, section_title
 from components.badges import badge, badge_row
 from utils.loaders import (
@@ -19,11 +13,7 @@ from utils.loaders import (
 )
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
-inject_css()
 meta   = load_model_metadata()
-winner = meta.get("winner_model", "—").replace("_", " ").title() if meta else "—"
-f1_str = f"{meta.get('winner_test_f1_macro', 0):.3f}" if meta else "—"
-sidebar_branding(winner_model=winner, winner_f1=f1_str, pipeline_ok=meta is not None)
 
 page_header(
     "Conclusiones",

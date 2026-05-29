@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pipeline metodológico — ECG Arrhythmia ML</title>
+
+<!-- =====================================================================
+     BLOQUE AUTOCONTENIDO PARA STREAMLIT
+     Insertar con:
+        import streamlit as st
+        html = open("pipeline_metodologico.html", encoding="utf-8").read()
+        st.components.v1.html(html, height=2600, scrolling=True)
+     Todo es HTML + CSS inline. Sin React. Sin JS. Sin dependencias externas.
+     ===================================================================== -->
+
+<style>
+/* ===================================================================
+   TOKENS / RESET
+   =================================================================== */
+.pm-root *{ box-sizing:border-box; margin:0; padding:0; }
+.pm-root{
+  /* paleta solicitada */
+  --bg:#07090f;
+  --card:#0d1220;
+  --card-2:#111829;
+  --blue:#4a8cff;
+  --teal:#22d3ee;
+  --green:#22c55e;
+  --amber:#f59e0b;
+  --red:#ef4444;
+  --fg:#f1f5fb;
+  --fg-2:#94a3b8;
+  --fg-3:#5f6c86;
+  --line:#1b2438;
+  --line-2:#26324c;
+
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+
+  font-family:var(--sans);
+  background:
+    radial-gradient(1100px 520px at 88% -8%, rgba(34,211,238,.06), transparent 60%),
+    radial-gradient(900px 520px at -6% 108%, rgba(74,140,255,.06), transparent 55%),
+    var(--bg);
+  color:var(--fg);
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  padding:28px clamp(14px,3vw,34px) 48px;
+  font-size:14px;
+}
+.pm-root a{ color:var(--blue); text-decoration:none; }
+.pm-wrap{ max-width:1180px; margin:0 auto; }
+
+/* utilities */
+.pm-mono{ font-family:var(--mono); }
+.pm-grid{ display:grid; gap:16px; }
+.pm-muted{ color:var(--fg-2); }
+
+/* ===================================================================
+   BADGES
+   =================================================================== */
+.pm-badge{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 9px; border-radius:7px;
+  font-family:var(--mono); font-size:11px; letter-spacing:.02em;
+  border:1px solid var(--line-2); color:var(--fg-2);
+  background:rgba(255,255,255,.02); white-space:nowrap;
+}
+.pm-badge .d{ width:6px; height:6px; border-radius:50%; background:currentColor; }
+.pm-badge.blue { color:#a9c6ff; border-color:rgba(74,140,255,.4);  background:rgba(74,140,255,.10); }
+.pm-badge.teal { color:#8ee9f7; border-color:rgba(34,211,238,.4);  background:rgba(34,211,238,.10); }
+.pm-badge.green{ color:#86efac; border-color:rgba(34,197,94,.4);   background:rgba(34,197,94,.10); }
+.pm-badge.amber{ color:#fcd34d; border-color:rgba(245,158,11,.4);  background:rgba(245,158,11,.10); }
+.pm-badge.red  { color:#fca5a5; border-color:rgba(239,68,68,.4);   background:rgba(239,68,68,.10); }
+
+/* ===================================================================
+   1 · HEADER
+   =================================================================== */
+.pm-header{
+  position:relative; overflow:hidden;
+  border:1px solid var(--line-2); border-radius:18px;
+  background:
+    radial-gradient(ellipse at 92% 0%, rgba(34,211,238,.12), transparent 52%),
+    radial-gradient(ellipse at 0% 120%, rgba(74,140,255,.10), transparent 55%),
+    linear-gradient(180deg,#0f1729,#0a1020);
+  padding:26px 28px 0;
+}
+.pm-header .eyebrow{
+  font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--teal); margin-bottom:10px;
+}
+.pm-header h1{
+  font-size:clamp(24px,3.4vw,32px); font-weight:600; letter-spacing:-.01em; color:var(--fg);
+}
+.pm-header p.sub{ color:var(--fg-2); margin-top:8px; max-width:640px; font-size:14.5px; }
+.pm-header .badges{ display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+.pm-header .ecg-strip{ margin:18px -28px 0; display:block; width:calc(100% + 56px); height:74px; opacity:.9; }
+
+/* ===================================================================
+   SECTION TITLES
+   =================================================================== */
+.pm-sec{ margin-top:34px; }
+.pm-sec-head{ display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.pm-sec-head .n{
+  font-family:var(--mono); font-size:11px; color:var(--fg-3);
+  border:1px solid var(--line-2); padding:3px 8px; border-radius:6px;
+}
+.pm-sec-head h2{ font-size:16px; font-weight:600; color:var(--fg); letter-spacing:.01em; }
+.pm-sec-head .rule{ flex:1; height:1px; background:linear-gradient(90deg,var(--line-2),transparent); }
+
+/* ===================================================================
+   2 · MAIN METHODOLOGY FLOW (timeline of stage cards)
+   =================================================================== */
+.pm-flow{ position:relative; display:flex; flex-direction:column; gap:0; }
+.pm-stage{
+  position:relative;
+  display:grid; grid-template-columns:64px 1fr; gap:0;
+}
+/* vertical connector spine */
+.pm-stage .spine{
+  position:relative; display:flex; flex-direction:column; align-items:center;
+}
+.pm-stage .spine .num{
+  width:40px; height:40px; border-radius:11px; flex:none;
+  display:grid; place-items:center;
+  font-family:var(--mono); font-size:14px; font-weight:600;
+  background:var(--card-2); border:1px solid var(--line-2); color:var(--fg);
+  z-index:2;
+}
+.pm-stage .spine .line{
+  width:2px; flex:1; min-height:18px;
+  background:linear-gradient(180deg,var(--line-2),var(--line));
+}
+.pm-stage:last-child .spine .line{ display:none; }
+.pm-stage.done   .spine .num{ background:rgba(34,197,94,.12);  color:var(--green); border-color:rgba(34,197,94,.4); }
+.pm-stage.active .spine .num{ background:rgba(34,211,238,.12);  color:var(--teal);  border-color:rgba(34,211,238,.45); box-shadow:0 0 0 4px rgba(34,211,238,.08); }
+.pm-stage.todo   .spine .num{ background:rgba(74,140,255,.10);  color:var(--blue);  border-color:rgba(74,140,255,.35); }
+
+.pm-stage .body{ padding:0 0 18px 18px; }
+.pm-card{
+  border:1px solid var(--line); border-radius:14px; background:var(--card);
+  padding:18px 20px; transition:border-color .15s, transform .15s;
+}
+.pm-card:hover{ border-color:var(--line-2); transform:translateY(-1px); }
+.pm-card .top{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+.pm-card h3{ font-size:15px; font-weight:600; color:var(--fg); }
+.pm-card .desc{ color:var(--fg-2); font-size:13.5px; margin-top:6px; max-width:760px; }
+
+/* sub-steps (preprocessing) */
+.pm-substeps{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.pm-substep{
+  display:inline-flex; align-items:center; gap:7px;
+  padding:6px 10px; border-radius:8px; font-size:12.5px;
+  background:var(--card-2); border:1px solid var(--line-2); color:var(--fg);
+}
+.pm-substep .i{ width:18px; height:18px; flex:none; color:var(--teal); }
+.pm-arrow-mini{ color:var(--fg-3); align-self:center; font-family:var(--mono); }
+
+/* params */
+.pm-params{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.pm-param{
+  font-family:var(--mono); font-size:12px; color:var(--fg);
+  background:#0a0f1d; border:1px solid var(--line-2); border-radius:7px; padding:5px 9px;
+}
+.pm-param b{ color:var(--teal); font-weight:600; }
+
+/* IO blocks */
+.pm-io{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+@media(max-width:640px){ .pm-io{ grid-template-columns:1fr; } }
+.pm-io .io{
+  border:1px solid var(--line); border-radius:10px; padding:11px 13px; background:var(--card-2);
+}
+.pm-io .io .io-h{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+  display:flex; align-items:center; gap:6px; margin-bottom:7px;
+}
+.pm-io .io.in  .io-h{ color:var(--blue); }
+.pm-io .io.out .io-h{ color:var(--teal); }
+.pm-io .io .io-h .dot{ width:7px; height:7px; border-radius:50%; background:currentColor; }
+.pm-io .io ul{ list-style:none; display:flex; flex-direction:column; gap:4px; }
+.pm-io .io li{
+  font-size:12.5px; color:var(--fg); padding-left:14px; position:relative;
+}
+.pm-io .io li::before{
+  content:""; position:absolute; left:0; top:8px; width:5px; height:5px; border-radius:1px;
+  background:var(--fg-3);
+}
+.pm-io .io.in  li::before{ background:rgba(74,140,255,.7); }
+.pm-io .io.out li::before{ background:rgba(34,211,238,.7); }
+
+/* model chips */
+.pm-models{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.pm-model{
+  font-family:var(--mono); font-size:12px; color:var(--fg);
+  padding:6px 11px; border-radius:8px; background:var(--card-2);
+  border:1px solid var(--line-2);
+}
+.pm-model.win{ color:var(--green); border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.10); }
+
+/* metric pills */
+.pm-metrics{ display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+.pm-metric{
+  border:1px solid var(--line-2); border-radius:10px; padding:9px 13px; background:#0a0f1d;
+  min-width:130px;
+}
+.pm-metric .k{ font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--fg-3); }
+.pm-metric .v{ font-size:20px; font-weight:600; color:var(--fg); font-variant-numeric:tabular-nums; margin-top:2px; }
+.pm-metric .v.green{ color:var(--green); }
+.pm-metric .v.blue{ color:var(--blue); }
+
+/* ===================================================================
+   3 · TWO PIPELINES (A signal / B ML)
+   =================================================================== */
+.pm-rails{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media(max-width:820px){ .pm-rails{ grid-template-columns:1fr; } }
+.pm-rail{
+  border:1px solid var(--line); border-radius:16px; padding:18px 18px 20px; background:var(--card);
+  position:relative; overflow:hidden;
+}
+.pm-rail.a{ border-color:rgba(34,211,238,.22); }
+.pm-rail.b{ border-color:rgba(74,140,255,.22); }
+.pm-rail .rail-h{ display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+.pm-rail .rail-h .tag{
+  font-family:var(--mono); font-size:11px; padding:3px 8px; border-radius:6px; font-weight:600;
+}
+.pm-rail.a .rail-h .tag{ color:var(--teal); background:rgba(34,211,238,.12); border:1px solid rgba(34,211,238,.35); }
+.pm-rail.b .rail-h .tag{ color:var(--blue); background:rgba(74,140,255,.12); border:1px solid rgba(74,140,255,.35); }
+.pm-rail .rail-h h3{ font-size:14.5px; font-weight:600; color:var(--fg); }
+.pm-rail .rail-sub{ color:var(--fg-2); font-size:12.5px; margin-bottom:14px; }
+
+.pm-chain{ display:flex; flex-direction:column; gap:0; }
+.pm-chain .node{
+  display:flex; align-items:center; gap:11px;
+  border:1px solid var(--line-2); border-radius:10px; padding:10px 13px;
+  background:var(--card-2); position:relative; z-index:2;
+}
+.pm-chain .node .ic{ width:22px; height:22px; flex:none; }
+.pm-rail.a .pm-chain .node .ic{ color:var(--teal); }
+.pm-rail.b .pm-chain .node .ic{ color:var(--blue); }
+.pm-chain .node .nm{ font-size:13px; color:var(--fg); font-weight:500; }
+.pm-chain .node .nm small{ display:block; font-family:var(--mono); font-size:10.5px; color:var(--fg-3); font-weight:400; }
+.pm-chain .node.start{ border-style:dashed; }
+.pm-chain .node.end{ }
+.pm-rail.a .pm-chain .node.end{ border-color:rgba(34,211,238,.45); background:rgba(34,211,238,.07); }
+.pm-rail.b .pm-chain .node.end{ border-color:rgba(74,140,255,.45); background:rgba(74,140,255,.07); }
+.pm-chain .conn{
+  height:14px; width:2px; margin:0 0 0 24px;
+  background:linear-gradient(180deg,var(--line-2),var(--line-2));
+}
+.pm-rail.a .pm-chain .conn{ background:linear-gradient(180deg,rgba(34,211,238,.5),rgba(34,211,238,.2)); }
+.pm-rail.b .pm-chain .conn{ background:linear-gradient(180deg,rgba(74,140,255,.5),rgba(74,140,255,.2)); }
+
+.pm-bridge{
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  margin:14px 0 2px; padding:10px 14px;
+  border:1px dashed var(--line-2); border-radius:10px;
+  font-family:var(--mono); font-size:12px; color:var(--fg-2);
+  background:rgba(34,211,238,.03);
+}
+.pm-bridge b{ color:var(--teal); }
+
+/* ===================================================================
+   4 · METHODOLOGICAL DECISIONS
+   =================================================================== */
+.pm-decisions{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+@media(max-width:920px){ .pm-decisions{ grid-template-columns:repeat(2,1fr); } }
+@media(max-width:520px){ .pm-decisions{ grid-template-columns:1fr; } }
+.pm-dec{
+  border:1px solid var(--line); border-radius:13px; padding:16px; background:var(--card);
+  border-top:2px solid var(--blue);
+}
+.pm-dec.green{ border-top-color:var(--green); }
+.pm-dec.amber{ border-top-color:var(--amber); }
+.pm-dec.red{ border-top-color:var(--red); }
+.pm-dec .dec-ic{
+  width:34px; height:34px; border-radius:9px; display:grid; place-items:center; margin-bottom:11px;
+  background:rgba(74,140,255,.12); color:var(--blue);
+}
+.pm-dec.green .dec-ic{ background:rgba(34,197,94,.12); color:var(--green); }
+.pm-dec.amber .dec-ic{ background:rgba(245,158,11,.12); color:var(--amber); }
+.pm-dec.red   .dec-ic{ background:rgba(239,68,68,.12);  color:var(--red); }
+.pm-dec h4{ font-size:13.5px; font-weight:600; color:var(--fg); margin-bottom:6px; }
+.pm-dec p{ font-size:12.5px; color:var(--fg-2); }
+
+/* ===================================================================
+   5 · OUTPUTS CHIPS
+   =================================================================== */
+.pm-outputs{ display:flex; flex-wrap:wrap; gap:10px; }
+.pm-chip{
+  display:inline-flex; align-items:center; gap:9px;
+  border:1px solid var(--line-2); border-radius:10px; padding:9px 13px;
+  background:var(--card); font-family:var(--mono); font-size:12.5px; color:var(--fg);
+}
+.pm-chip .ext{
+  font-size:10px; padding:2px 6px; border-radius:5px; font-weight:600; letter-spacing:.03em;
+}
+.pm-chip .ext.csv  { color:var(--green); background:rgba(34,197,94,.12); }
+.pm-chip .ext.png  { color:var(--teal);  background:rgba(34,211,238,.12); }
+.pm-chip .ext.json { color:var(--amber); background:rgba(245,158,11,.12); }
+.pm-chip .ext.joblib{ color:var(--blue); background:rgba(74,140,255,.12); }
+
+/* ===================================================================
+   6 · FINAL CALLOUT
+   =================================================================== */
+.pm-callout{
+  margin-top:30px;
+  border:1px solid var(--line-2);
+  border-left:3px solid var(--amber);
+  border-radius:13px; padding:18px 20px;
+  background:linear-gradient(90deg,rgba(245,158,11,.06),transparent 60%),var(--card);
+  display:flex; gap:14px; align-items:flex-start;
+}
+.pm-callout .c-ic{ color:var(--amber); flex:none; margin-top:2px; }
+.pm-callout .c-t{ font-weight:600; color:var(--fg); display:block; margin-bottom:4px; font-size:13.5px; }
+.pm-callout p{ color:var(--fg-2); font-size:13px; }
+
+/* streamlit note */
+.pm-note{
+  margin-top:22px; border:1px dashed var(--line-2); border-radius:11px; padding:14px 16px;
+  background:rgba(74,140,255,.03); font-size:12.5px; color:var(--fg-2);
+}
+.pm-note code{ font-family:var(--mono); color:var(--teal); background:#0a0f1d; padding:2px 6px; border-radius:5px; font-size:12px; }
+.pm-note b{ color:var(--fg); }
+
+.pm-foot{ margin-top:26px; text-align:center; font-family:var(--mono); font-size:11px; color:var(--fg-3); }
+</style>
+</head>
+
+<body>
+<div class="pm-root">
+<div class="pm-wrap">
+
+  <!-- ============================================================
+       1 · HEADER
+       ============================================================ -->
+  <header class="pm-header">
+    <div class="eyebrow">ECG Arrhythmia ML · metodología</div>
+    <h1>Pipeline metodológico</h1>
+    <p class="sub">De señales ECG intraoperatorias a evaluación multiclase de ritmos cardíacos.</p>
+    <div class="badges">
+      <span class="pm-badge teal"><span class="d"></span>VitalDB</span>
+      <span class="pm-badge teal"><span class="d"></span>ECG</span>
+      <span class="pm-badge blue"><span class="d"></span>Machine Learning</span>
+      <span class="pm-badge amber"><span class="d"></span>Demo académica · No uso clínico</span>
+    </div>
+    <!-- mini línea ECG decorativa -->
+    <svg class="ecg-strip" viewBox="0 0 1200 74" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="pmEcgGrad" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stop-color="#22d3ee" stop-opacity="0"/>
+          <stop offset=".12" stop-color="#22d3ee" stop-opacity=".9"/>
+          <stop offset=".88" stop-color="#4a8cff" stop-opacity=".9"/>
+          <stop offset="1" stop-color="#4a8cff" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d="M0 40 L120 40 L150 40 L165 24 L178 56 L190 12 L202 40 L235 40 L360 40 L388 40 L402 26 L414 54 L426 40 L600 40 L628 40 L642 22 L655 58 L668 10 L680 40 L720 40 L860 40 L888 40 L902 27 L915 53 L928 40 L1080 40 L1110 40 L1124 24 L1137 56 L1150 14 L1162 40 L1200 40"
+        fill="none" stroke="url(#pmEcgGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </header>
+
+  <!-- ============================================================
+       2 · FLUJO PRINCIPAL DE METODOLOGÍA (11 etapas)
+       ============================================================ -->
+  <section class="pm-sec">
+    <div class="pm-sec-head">
+      <span class="n">FLOW</span>
+      <h2>Flujo metodológico end-to-end</h2>
+      <span class="rule"></span>
+      <span class="pm-badge"><span class="d" style="background:var(--green)"></span>9 completadas</span>
+      <span class="pm-badge"><span class="d" style="background:var(--teal)"></span>1 en curso</span>
+      <span class="pm-badge"><span class="d" style="background:var(--blue)"></span>1 pendiente</span>
+    </div>
+
+    <div class="pm-flow">
+
+      <!-- ETAPA 1 -->
+      <div class="pm-stage done">
+        <div class="spine"><div class="num">1</div><div class="line"></div></div>
+        <div class="body">
+          <div class="pm-card">
+            <div class="top">
+              <h3>Análisis del problema</h3>
+              <span class="pm-badge blue">Problem definition</span>
+            </div>
+            <p class="desc">Se define el reto de clasificar ritmos cardíacos intraoperatorios a partir de señales ECG, considerando ruido, artefactos y desbalance de clases.</p>
+            <div class="pm-io">
+              <div class="io in">
+                <div class="io-h"><span class="dot"></span>Input</div>
+                <ul><li>Contexto clínico</li><li>ECG intraoperatorio</li><li>Etiquetas de ritmo</li></ul>
+              </div>
+              <div class="io out">
+                <div class="io-h"><span class="dot"></span>Output</div>
+                <ul><li>Objetivo de clasificación multiclase</li></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 2 -->
+      <div class="pm-stage done">
+        <div class="spine"><div class="num">2</div><div class="line"></div></div>
+        <div class="body">
+          <div class="pm-card">
+            <div class="top">
+              <h3>Exploración de datos</h3>
+              <span class="pm-badge blue">EDA</span>
+            </div>
+            <p class="desc">Se revisan metadatos, anotaciones por latido, distribución de clases, calidad de señal y presencia de datos faltantes.</p>
+            <div class="pm-io">
+              <div class="io in">
+                <div class="io-h"><span class="dot"></span>Inputs</div>
+                <ul><li>metadata.csv</li><li>Archivos de anotaciones</li><li>Señales ECG</li></ul>
+              </div>
+              <div class="io out">
+                <div class="io-h"><span class="dot"></span>Outputs</div>
+                <ul><li>Conteos por clase</li><li>Revisión de NaN</li><li>Revisión de calidad</li><li>Diagnóstico de desbalance</li></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 3 · PREPROCESAMIENTO ECG -->
+      <div class="pm-stage done">
+        <div class="spine"><div class="num">3</div><div class="line"></div></div>
+        <div class="body">
+          <div class="pm-card">
+            <div class="top">
+              <h3>Preprocesamiento ECG</h3>
+              <span class="pm-badge teal">Signal processing</span>
+            </div>
+            <p class="desc">Las señales ECG crudas se transforman para hacerlas compatibles con el flujo del modelo.</p>
+            <div class="pm-substeps">
+              <span class="pm-substep">
+                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>
+                Interpolación de NaN
+              </span>
+              <span class="pm-arrow-mini">→</span>
+              <span class="pm-substep">
+                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18V6M9 18V9M14 18v-6M19 18v-3"/></svg>
+                Remuestreo a 500 Hz
+              </span>
+              <span class="pm-arrow-mini">→</span>
+              <span class="pm-substep">
+                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h18M6 8l-2 4 2 4M18 8l2 4-2 4"/></svg>
+                Filtro pasa banda 0.5–40 Hz
+              </span>
+              <span class="pm-arrow-mini">→</span>
+              <span class="pm-substep">
+                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M3 12h18"/></svg>
+                Normalización
+              </span>
+            </div>
+            <div class="pm-params">
+              <span class="pm-param">TARGET_FS = <b>500 Hz</b></span>
+              <span class="pm-param">LOWCUT_HZ = <b>0.5</b></span>
+              <span class="pm-param">HIGHCUT_HZ = <b>40.0</b></span>
+            </div>
+            <div class="pm-io">
+              <div class="io in">
+                <div class="io-h"><span class="dot"></span>Input</div>
+                <ul><li>ECG crudo</li></ul>
+              </div>
+              <div class="io out">
+                <div class="io-h"><span class="dot"></span>Output</div>
+                <ul><li>ECG procesado</li></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 4 -->
+      <div class="pm-stage done">
+        <div class="spine"><div class="num">4</div><div class="line"></div></div>
+        <div class="body">
+          <div class="pm-card">
+            <div class="top">
+              <h3>Limpieza y preparación del dataset</h3>
+              <span class="pm-badge blue">Data preparation</span>
+            </div>
+            <p class="desc">Se construye un dataset tabular final, definiendo variables predictoras, variable objetivo y columnas prohibidas para evitar leakage.</p>
+            <div class="pm-params">
+              <span class="pm-param">target = <b>rhythm_label</b></span>
+              <span class="pm-param">group = <b>case_id</b></span>
+              <span class="pm-param" style="border-color:rgba(239,68,68,.4)">beat_type = <b style="color:var(--red)">descriptivo · no predictor</b></span>
+            </div>
+            <div class="pm-io">
+              <div class="io out" style="grid-column:1 / -1">
+                <div class="io-h"><span class="dot"></span>Output</div>
+                <ul><li>Dataset tabular para modelado</li></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 5 -->
+      <div class="pm-stage done">
+        <div class="spine"><div class="num">5</div><div class="line"></div></div>
+        <div class="body">
+          <div class="pm-card">
+            <div class="top">
+              <h3>Feature engineering</h3>
+              <span class="pm-badge blue">Features</span>
+            </div>
+            <p class="desc">Se extraen características numéricas asociadas a ritmo, intervalos RR, amplitud, energía y morfología.</p>
+            <div class="pm-models">
+              <span class="pm-model">case_rr_std</span>
+              <span class="pm-model">case_rr_rmssd</span>
+              <span class="pm-model">rr_prev</span>
+              <span class="pm-model">rr_mean_local</span>
+              <span class="pm-model">std</span>
+              <span class="pm-model">var</span>
+              <span class="pm-model">energy</span>
+            </div>
+            <div class="pm-io">
+              <div class="io out" style="grid-column:1 / -1">
+                <div class="io-h"><span class="dot"></span>Output</div>
+                <ul><li>Vector de features</li></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 6 -->
+      <div class="pm-stage done">
+        <div class="spine"><div class="num">6</div><div class="line"></div></div>
+        <div class="body">
+          <div class="pm-card">
+            <div class="top">
+              <h3>Split train/test por case_id</h3>
+              <span class="pm-badge amber">Leakage control</span>
+            </div>
+            <p class="desc">Los datos se dividen en entrenamiento y prueba separando por caso/paciente para reducir leakage.</p>
+            <div class="pm-params">
+              <span class="pm-param">split = <b>80 / 20</b></span>
+              <span class="pm-param">separación por <b>case_id</b></span>
+              <span class="pm-param">sin mezclar ventanas del mismo caso</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 7 -->
+      <div class="pm-stage done">
+        <div class="spine"><div class="num">7</div><div class="line"></div></div>
+        <div class="body">
+          <div class="pm-card">
+            <div class="top">
+              <h3>Modelado</h3>
+              <span class="pm-badge blue">Model training</span>
+            </div>
+            <p class="desc">Se entrenan y comparan modelos supervisados de clasificación multiclase.</p>
+            <div class="pm-models">
+              <span class="pm-model">Logistic Regression</span>
+              <span class="pm-model">SVM / LinearSVC</span>
+              <span class="pm-model">Decision Tree</span>
+              <span class="pm-model">Random Forest</span>
+              <span class="pm-model">XGBoost</span>
+              <span class="pm-model">MLP</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 8 -->
+      <div class="pm-stage done">
+        <div class="spine"><div class="num">8</div><div class="line"></div></div>
+        <div class="body">
+          <div class="pm-card">
+            <div class="top">
+              <h3>Búsqueda de hiperparámetros</h3>
+              <span class="pm-badge blue">Tuning</span>
+            </div>
+            <p class="desc">Se aplica búsqueda de hiperparámetros para mejorar la generalización y reducir sobreajuste.</p>
+            <div class="pm-params">
+              <span class="pm-param">método = <b>Random Search / RandomizedSearchCV</b></span>
+            </div>
+            <div class="pm-io">
+              <div class="io out" style="grid-column:1 / -1">
+                <div class="io-h"><span class="dot"></span>Output</div>
+                <ul><li>Mejores configuraciones por modelo</li></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 9 -->
+      <div class="pm-stage active">
+        <div class="spine"><div class="num">9</div><div class="line"></div></div>
+        <div class="body">
+          <div class="pm-card">
+            <div class="top">
+              <h3>Evaluación y selección del modelo</h3>
+              <span class="pm-badge teal">Evaluation</span>
+            </div>
+            <p class="desc">Los modelos se comparan usando métricas globales y por clase.</p>
+            <div class="pm-models">
+              <span class="pm-model">Precision</span>
+              <span class="pm-model">Recall</span>
+              <span class="pm-model">F1-score</span>
+              <span class="pm-model">F1-macro</span>
+              <span class="pm-model">Accuracy</span>
+              <span class="pm-model">Matriz de confusión</span>
+            </div>
+            <div class="pm-metrics">
+              <div class="pm-metric"><div class="k">Mejor modelo</div><div class="v green">LinearSVC</div></div>
+              <div class="pm-metric"><div class="k">F1-macro</div><div class="v">≈ 0.3439</div></div>
+              <div class="pm-metric"><div class="k">Accuracy</div><div class="v blue">≈ 0.8061</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 10 -->
+      <div class="pm-stage todo">
+        <div class="spine"><div class="num">10</div><div class="line"></div></div>
+        <div class="body">
+          <div class="pm-card">
+            <div class="top">
+              <h3>Interpretabilidad</h3>
+              <span class="pm-badge blue">Interpretability</span>
+            </div>
+            <p class="desc">Se analizan las features más importantes para entender qué información usa el modelo.</p>
+            <div class="pm-models">
+              <span class="pm-model">case_rr_std</span>
+              <span class="pm-model">case_rr_rmssd</span>
+              <span class="pm-model">std</span>
+              <span class="pm-model">var</span>
+              <span class="pm-model">energy</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 11 -->
+      <div class="pm-stage todo">
+        <div class="spine"><div class="num">11</div></div>
+        <div class="body">
+          <div class="pm-card">
+            <div class="top">
+              <h3>Despliegue en Streamlit</h3>
+              <span class="pm-badge green">Streamlit app</span>
+            </div>
+            <p class="desc">La app permite explorar el proyecto, revisar resultados, visualizar señales ECG y probar el preprocesamiento con casos demo.</p>
+            <div class="pm-params">
+              <span class="pm-param">estado = <b>demo académica</b></span>
+              <span class="pm-param" style="border-color:rgba(245,158,11,.4)"><b style="color:var(--amber)">no uso clínico</b></span>
+              <span class="pm-param">predicción final pendiente de conexión completa si aplica</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================
+       3 · DOS PIPELINES CONECTADOS (A señal · B ML)
+       ============================================================ -->
+  <section class="pm-sec">
+    <div class="pm-sec-head">
+      <span class="n">DUAL</span>
+      <h2>Dos niveles: procesamiento de señal y aprendizaje</h2>
+      <span class="rule"></span>
+    </div>
+
+    <div class="pm-rails">
+
+      <!-- PIPELINE A · SEÑAL ECG -->
+      <div class="pm-rail a">
+        <div class="rail-h">
+          <span class="tag">PIPELINE A</span>
+          <h3>Señal ECG</h3>
+        </div>
+        <div class="rail-sub">Transforma la señal cruda en una entrada limpia y estandarizada. <b style="color:var(--fg)">No es el modelo</b>: es el paso previo.</div>
+        <div class="pm-chain">
+          <div class="node start">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12h4l2-6 4 12 2-6h8"/></svg>
+            <span class="nm">ECG crudo<small>raw signal · VitalDB</small></span>
+          </div>
+          <div class="conn"></div>
+          <div class="node">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17c3 0 3-10 6-10s3 10 6 10 3-10 6-10"/></svg>
+            <span class="nm">Interpolación de NaN</span>
+          </div>
+          <div class="conn"></div>
+          <div class="node">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18V6M9 18V9M14 18v-6M19 18v-3"/></svg>
+            <span class="nm">Resampling<small>TARGET_FS = 500 Hz</small></span>
+          </div>
+          <div class="conn"></div>
+          <div class="node">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h18M6 8l-2 4 2 4M18 8l2 4-2 4"/></svg>
+            <span class="nm">Filtro pasa banda<small>0.5 – 40 Hz</small></span>
+          </div>
+          <div class="conn"></div>
+          <div class="node">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M3 12h18"/></svg>
+            <span class="nm">Normalización</span>
+          </div>
+          <div class="conn"></div>
+          <div class="node end">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12h4l2-4 4 8 2-4h8"/></svg>
+            <span class="nm">ECG procesado<small>signal ready</small></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PIPELINE B · MACHINE LEARNING -->
+      <div class="pm-rail b">
+        <div class="rail-h">
+          <span class="tag">PIPELINE B</span>
+          <h3>Machine Learning</h3>
+        </div>
+        <div class="rail-sub">Convierte la señal procesada y las anotaciones en un dataset tabular, modelos y evaluación.</div>
+        <div class="pm-chain">
+          <div class="node start">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12h4l2-4 4 8 2-4h8"/></svg>
+            <span class="nm">ECG procesado / anotaciones</span>
+          </div>
+          <div class="conn"></div>
+          <div class="node">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="6" height="12" rx="1"/><rect x="11" y="6" width="10" height="12" rx="1" stroke-dasharray="3 3"/></svg>
+            <span class="nm">Ventanas</span>
+          </div>
+          <div class="conn"></div>
+          <div class="node">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18V8M9 18v-7M14 18V6M19 18v-9"/></svg>
+            <span class="nm">Features</span>
+          </div>
+          <div class="conn"></div>
+          <div class="node">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></svg>
+            <span class="nm">Dataset tabular</span>
+          </div>
+          <div class="conn"></div>
+          <div class="node">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-3"/></svg>
+            <span class="nm">Modelos</span>
+          </div>
+          <div class="conn"></div>
+          <div class="node">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 4-5"/></svg>
+            <span class="nm">Evaluación</span>
+          </div>
+          <div class="conn"></div>
+          <div class="node end">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg>
+            <span class="nm">App<small>demo académica</small></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pm-bridge">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--teal)"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      El <b>ECG procesado</b> del Pipeline A es la entrada del Pipeline B — el preprocesamiento de señal no es el modelo, es el puente hacia él.
+    </div>
+  </section>
+
+  <!-- ============================================================
+       4 · DECISIONES METODOLÓGICAS
+       ============================================================ -->
+  <section class="pm-sec">
+    <div class="pm-sec-head">
+      <span class="n">WHY</span>
+      <h2>Decisiones metodológicas</h2>
+      <span class="rule"></span>
+    </div>
+    <div class="pm-decisions">
+      <div class="pm-dec amber">
+        <div class="dec-ic">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 15l3-4 3 2 4-6"/></svg>
+        </div>
+        <h4>F1-macro como métrica principal</h4>
+        <p>Se prioriza F1-macro porque el dataset presenta fuerte desbalance entre clases.</p>
+      </div>
+      <div class="pm-dec green">
+        <div class="dec-ic">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 3h5v5M21 3l-7 7M8 21H3v-5M3 21l7-7"/></svg>
+        </div>
+        <h4>Split por case_id</h4>
+        <p>Se evita que señales del mismo paciente aparezcan en entrenamiento y prueba.</p>
+      </div>
+      <div class="pm-dec red">
+        <div class="dec-ic">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        </div>
+        <h4>beat_type bloqueado</h4>
+        <p>beat_type se usa como información descriptiva, pero no como predictor para evitar leakage.</p>
+      </div>
+      <div class="pm-dec">
+        <div class="dec-ic">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+        </div>
+        <h4>No uso clínico</h4>
+        <p>La app es una demo académica y no reemplaza juicio médico.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       5 · OUTPUTS DEL PROYECTO (chips)
+       ============================================================ -->
+  <section class="pm-sec">
+    <div class="pm-sec-head">
+      <span class="n">OUT</span>
+      <h2>Artefactos generados</h2>
+      <span class="rule"></span>
+    </div>
+    <div class="pm-outputs">
+      <span class="pm-chip"><span class="ext csv">CSV</span>model_comparison.csv</span>
+      <span class="pm-chip"><span class="ext csv">CSV</span>best_model_classification_report.csv</span>
+      <span class="pm-chip"><span class="ext png">PNG</span>best_model_confusion_matrix.png</span>
+      <span class="pm-chip"><span class="ext csv">CSV</span>best_model_feature_importance.csv</span>
+      <span class="pm-chip"><span class="ext joblib">JOBLIB</span>best_model_pipeline.joblib</span>
+      <span class="pm-chip"><span class="ext json">JSON</span>feature_columns.json</span>
+      <span class="pm-chip"><span class="ext csv">CSV</span>demo_cases_metadata.csv</span>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       6 · CALLOUT FINAL
+       ============================================================ -->
+  <div class="pm-callout">
+    <svg class="c-ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+    <div>
+      <span class="c-t">Lectura de la metodología</span>
+      <p>La metodología conecta procesamiento de señal, construcción de features, comparación de modelos y evaluación por clase. El desempeño global debe interpretarse con cautela debido al fuerte desbalance de ritmos intraoperatorios.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       NOTA · cómo insertar en Streamlit (no se muestra al usuario final
+       si decides quitarla; es solo guía)
+       ============================================================ -->
+  <div class="pm-note">
+    <b>Cómo insertarlo en Streamlit:</b> guarda este archivo como <code>pipeline_metodologico.html</code> y, en tu pestaña “02 Pipeline del proyecto”, ejecuta:
+    <code>html = open("pipeline_metodologico.html", encoding="utf-8").read()</code> → <code>st.components.v1.html(html, height=2600, scrolling=True)</code>.
+    Ajusta <code>height</code> según el contenido (≈2400–2800 px) y deja <code>scrolling=True</code> para que sea responsive dentro del iframe.
+  </div>
+
+  <div class="pm-foot">ECG Arrhythmia ML · pipeline metodológico · demo académica — no uso clínico</div>
+
+</div>
+</div>
+</body>
+</html>

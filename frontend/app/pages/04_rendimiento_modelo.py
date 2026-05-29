@@ -9,33 +9,19 @@ import json
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(
-    page_title="ECG Arrhythmia ML · Rendimiento",
-    page_icon="🫀",
-    layout="wide",
-)
-
 from components.badges import badge
 from components.cards  import callout, card_header, kv_table, metric_card, section_title
 from components.charts import fit_time_bar, model_metrics_bar
-from components.layout import inject_css, page_header, sidebar_branding
+from components.layout import page_header
 from components.tables import model_comparison_table
 from utils.loaders     import load_model_comparison, load_model_metadata
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
-inject_css()
-
 meta   = load_model_metadata()
 df_raw = load_model_comparison()
 
 _winner_id  = meta.get("winner_model", "") if meta else ""
 _f1_meta    = meta.get("winner_test_f1_macro") if meta else None
-sidebar_branding(
-    winner_model=_winner_id.replace("_", " ").title() if _winner_id else "—",
-    winner_f1=f"{_f1_meta:.3f}" if _f1_meta else "—",
-    pipeline_ok=meta is not None,
-)
-
 page_header(
     "Rendimiento del modelo",
     "Comparación de clasificadores entrenados para la detección multiclase "

@@ -2,19 +2,11 @@
 
 import streamlit as st
 
-st.set_page_config(
-    page_title="ECG Arrhythmia ML · Inicio",
-    page_icon="🫀",
-    layout="wide",
-)
-
-# Imports after set_page_config
 import pandas as pd
 
 from components.badges  import badge, badge_row, pill
 from components.cards   import callout, card_header, kv_table, metric_card, section_title
 from components.charts  import bar_chart_h, mini_ecg_placeholder
-from components.layout  import inject_css, sidebar_branding
 from utils.loaders      import (
     load_classification_report,
     load_model_comparison,
@@ -22,8 +14,6 @@ from utils.loaders      import (
 )
 
 # ── Global setup ──────────────────────────────────────────────────────────────
-inject_css()
-
 meta    = load_model_metadata()
 df_cmp  = load_model_comparison()
 df_cls  = load_classification_report()
@@ -61,12 +51,6 @@ else:
 
 # Count real models from comparison csv
 n_models = len(df_cmp) if df_cmp is not None else 5
-
-sidebar_branding(
-    winner_model=winner_nice,
-    winner_f1=f1_str,
-    pipeline_ok=meta is not None,
-)
 
 # ── HERO ─────────────────────────────────────────────────────────────────────
 st.markdown(

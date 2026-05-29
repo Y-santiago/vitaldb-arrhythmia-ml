@@ -6,10 +6,8 @@ for VitalDB Arrhythmia adaptation.
 from __future__ import annotations
 
 import numpy as np
-import pyvital
 
-from scipy.signal import resample
-
+from scipy.signal import resample, butter, filtfilt
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 
@@ -24,14 +22,52 @@ LOWCUT_HZ = 0.5
 HIGHCUT_HZ = 40.0
 
 
+# Pyvital is the primary backend; scipy is used as fallback when pyvital
+# is not installed in the active environment (e.g. Anaconda + Streamlit).
+try:
+    import pyvital as _pyvital
+    _HAS_PYVITAL = True
+except ImportError:
+    _HAS_PYVITAL = False
+
+
+# =========================================================
+# PRIVATE FALLBACKS (scipy-only)
+# =========================================================
+
+def _interp_nans_scipy(signal: np.ndarray) -> np.ndarray:
+    nan_mask = np.isnan(signal)
+    if not nan_mask.any():
+        return signal
+    x = np.arange(len(signal))
+    signal = signal.copy()
+    signal[nan_mask] = np.interp(x[nan_mask], x[~nan_mask], signal[~nan_mask])
+    return signal
+
+
+def _bandpass_scipy(
+    signal: np.ndarray,
+    fs: float,
+    lowcut: float,
+    highcut: float,
+) -> np.ndarray:
+    nyq = 0.5 * fs
+    b, a = butter(4, [lowcut / nyq, highcut / nyq], btype="band")
+    return filtfilt(b, a, signal)
+
+
+# =========================================================
+# PUBLIC API
+# =========================================================
 
 def interpolate_nans(signal):
 
     signal = np.asarray(signal).flatten()
 
-    return pyvital.interp_undefined(
-        signal
-    )
+    if _HAS_PYVITAL:
+        return _pyvital.interp_undefined(signal)
+
+    return _interp_nans_scipy(signal)
 
 
 
@@ -63,12 +99,15 @@ def bandpass_filter(
     highcut=HIGHCUT_HZ
 ):
 
-    return pyvital.band_pass(
-        signal,
-        srate=fs,
-        fl=lowcut,
-        fh=highcut
-    )
+    if _HAS_PYVITAL:
+        return _pyvital.band_pass(
+            signal,
+            srate=fs,
+            fl=lowcut,
+            fh=highcut,
+        )
+
+    return _bandpass_scipy(signal, fs, lowcut, highcut)
 
 
 
@@ -142,7 +181,7 @@ def preprocess_ecg(
     )
 
     processed_signal = (
-        pipeline.transform(signal)
+        pipeline.fit_transform(signal)
     )
 
     return processed_signal

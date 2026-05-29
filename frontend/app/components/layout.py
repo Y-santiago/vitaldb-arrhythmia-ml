@@ -14,7 +14,6 @@ def inject_css() -> None:
     css_path = ASSETS_DIR / "styles.css"
     if css_path.exists():
         css = css_path.read_text(encoding="utf-8")
-        # Use st.markdown for <style> tag injection — this is the supported path
         st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
     else:
         st.warning(f"CSS file not found: {css_path}")
@@ -27,28 +26,23 @@ def sidebar_branding(
     winner_f1: str = "—",
     pipeline_ok: bool = True,
 ) -> None:
-    """Render the custom sidebar branding block (logo, title, status)."""
+    """Render the custom sidebar branding block (title, subtitle, status).
+
+    Uses st.sidebar.markdown() so that CSS classes from styles.css apply
+    (st.sidebar.html() renders in an isolated iframe where global CSS does not reach).
+    """
     status_color = "var(--ok)" if pipeline_ok else "var(--err)"
     status_text  = "&#x25CF; ok" if pipeline_ok else "&#x25CF; error"
 
-    ecg_svg = (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"'
-        ' stroke="#2dd4bf" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
-        '<path d="M2 12 H6 L8 8 L11 16 L14 6 L16 12 H22"/>'
-        "</svg>"
+    st.sidebar.markdown(
+        '<div class="sb-brand">'
+        '<div class="sb-title">ECG Arrhythmia ML</div>'
+        '<div class="sb-sub">Clasificación de ritmos intraoperatorios</div>'
+        '</div>',
+        unsafe_allow_html=True,
     )
 
-    st.sidebar.html(
-        f'<div class="sb-brand">'
-        f'<div class="sb-logo">{ecg_svg}</div>'
-        f'<div>'
-        f'<div class="sb-title">ECG Arrhythmia ML</div>'
-        f'<div class="sb-sub">Clasificación de ritmos intraoperatorios</div>'
-        f'</div>'
-        f'</div>'
-    )
-
-    st.sidebar.html(
+    st.sidebar.markdown(
         f'<div class="sb-status">'
         f'<div style="margin-bottom:8px">'
         f'<span class="sb-stamp">DEMO ACADÉMICA</span>'
@@ -65,7 +59,8 @@ def sidebar_branding(
         f'<span class="sb-status-key">F1-macro</span>'
         f'<span class="sb-status-val">{winner_f1}</span>'
         f'</div>'
-        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
     )
 
 
