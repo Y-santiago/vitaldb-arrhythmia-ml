@@ -1,27 +1,47 @@
 # Model B Independent Binary Rhythm Pipeline
 
-This folder contains an independent, reproducible pipeline for the binary task:
+Modelo B es un flujo independiente para clasificar:
 
-- Negative class: `normal_sinus`
-- Positive class: `arrhythmia_or_abnormal`
+- Clase negativa: `normal_sinus`
+- Clase positiva: `arrhythmia_or_abnormal`
 - Target: `rhythm_binary`
-- Split: 80/20 by `case_id`, with no overlap between train and test
+- Split externo: 80/20 por `case_id`, sin overlap entre train y test
 
-The pipeline does not use raw ECG windows, multiclass labels, administrative/intraoperative predictors, or the previous broad binary feature set.
+No usa ECG crudo, archivos `.npy`, `vitaldb.load_case`, multiclase, variables administrativas ni variables intraoperatorias como predictores.
 
-## Required Base Dataset
+## Que Archivo Correr Primero
 
-The pipeline expects:
+Desde la raiz del repositorio:
+
+```bash
+python model_b_pipeline/audit_model_b_dataset.py
+python model_b_pipeline/build_model_b_dataset.py
+python model_b_pipeline/train_model_b.py --debug
+python model_b_pipeline/evaluate_model_b.py
+```
+
+Que hace cada archivo:
+
+- `audit_model_b_dataset.py`: revisa el parquet base y genera auditoria premodelo.
+- `build_model_b_dataset.py`: crea `data/processed/model_b_dataset.parquet` con solo `case_id`, `rhythm_binary` y las 25 variables.
+- `train_model_b.py`: compara modelos, busca hiperparametros, selecciona ganador por CV, evalua test una vez y guarda artefactos para app.
+- `evaluate_model_b.py`: refresca los reportes Markdown a partir de tablas y JSON ya generados.
+- `predict_model_b.py`: carga el modelo guardado y predice sobre un dataframe para usarlo en una app.
+- `tests_model_b.py`: valida seguridad de features, split, busqueda, artefactos e inferencia.
+
+## Dataset Base Requerido
+
+El flujo espera:
 
 ```bash
 data/processed/binary_rhythm_modeling_dataset.parquet
 ```
 
-If this file is missing, the Model B scripts fail with a clear message. They do not rebuild legacy ECG or upstream tabular flows automatically.
+Si no existe, falla con un mensaje claro. Modelo B no reconstruye automaticamente flujos previos.
 
-## Model B Variables
+## Variables del Modelo
 
-Exactly these 25 original variables are used:
+Se usan exactamente estas 25 variables originales:
 
 ```python
 [
@@ -53,84 +73,117 @@ Exactly these 25 original variables are used:
 ]
 ```
 
-Forbidden columns such as `rhythm_label`, `rhythm_binary`, `beat_type`, `case_id`, identifiers, outcomes, procedure text, and intraoperative/administrative variables are not predictors. `case_id` is used only for grouped splitting.
+`case_id` se usa solo para split y CV por grupo. Nunca entra como predictor.
 
-## Step-by-Step Run
+## Este Flujo Hace Busqueda de Hiperparametros?
+
+Si. `train_model_b.py` ejecuta `RandomizedSearchCV` por cada modelo candidato usando validacion cruzada por `case_id`. El ganador se selecciona por promedio de `balanced_accuracy` en CV sobre train, salvo que se pase otro `--selection-metric`. El test se evalua una sola vez al final para el ganador.
+
+## Modelos que se Comparan
+
+Por defecto:
+
+- `dummy_most_frequent`
+- `logreg_balanced`
+- `sgd_log_loss`
+- `hist_gradient_boosting`
+
+Opcionales:
+
+- `random_forest_balanced` con `--include-random-forest`
+- `xgboost_binary` con `--include-xgboost`
+
+Puedes filtrar modelos asi:
 
 ```bash
-python model_b_pipeline/audit_model_b_dataset.py
-python model_b_pipeline/build_model_b_dataset.py
+python model_b_pipeline/train_model_b.py --debug --models logreg_balanced sgd_log_loss
+```
+
+## Debug vs Full Run
+
+Debug:
+
+```bash
 python model_b_pipeline/train_model_b.py --debug
-python model_b_pipeline/evaluate_model_b.py
 ```
 
-The training script performs the test evaluation once after hyperparameter search. `evaluate_model_b.py` then reads saved artifacts and writes the Markdown reports.
+Usa:
 
-## Full Run
-
-```bash
-python model_b_pipeline/train_model_b.py --n-iter 20 --n-splits 5
-python model_b_pipeline/evaluate_model_b.py
-```
-
-Optional random forest:
-
-```bash
-python model_b_pipeline/train_model_b.py --n-iter 20 --n-splits 5 --include-random-forest
-```
-
-## Debug Mode
-
-`--debug` sets:
-
+- `max_cases = 80`
 - `n_iter = 3`
 - `n_splits = 2`
-- `max_cases = 80`, unless a different `--max-cases` is provided
 
-This mode is intended to verify plumbing and output generation quickly. Do not interpret debug metrics as final model performance.
+Sirve para comprobar que todo corre. Sus metricas no son resultados finales.
 
-## Outputs
-
-Reports and tables:
+Full light recomendado:
 
 ```bash
-reports/model_b/
-reports/model_b/tables/
-reports/model_b/figures/
+python model_b_pipeline/train_model_b.py --n-iter 20 --n-splits 5 --models logreg_balanced sgd_log_loss hist_gradient_boosting
 ```
 
-Model artifacts:
+No incluye Random Forest por defecto para evitar tiempos largos.
+
+## Donde Quedo el Modelo para la App?
+
+Despues de entrenar con `--save-model` activo por defecto:
 
 ```bash
 models/model_b/model_b_best_pipeline.joblib
 models/model_b/model_b_feature_columns.json
 models/model_b/model_b_metadata.json
+models/model_b/model_b_threshold.json
 ```
 
-The reduced parquet and model artifacts are local generated outputs. The repository `.gitignore` excludes processed datasets and `models/model_b/`, so they are not intended to be versioned.
+El `.joblib` contiene preprocesamiento completo y modelo. La app no debe reconstruir imputadores, escaladores ni one-hot encoders.
 
-## Metrics
+Uso minimo:
 
-The main selection metric is CV `balanced_accuracy` on train folds grouped by `case_id`.
+```python
+from model_b_pipeline.predict_model_b import predict_model_b_dataframe
 
-The final test report includes:
+predicciones = predict_model_b_dataframe(df_entrada)
+```
 
-- balanced accuracy
-- accuracy
-- precision for `arrhythmia_or_abnormal`
-- recall/sensitivity for `arrhythmia_or_abnormal`
-- specificity for `normal_sinus`
-- F1 for `arrhythmia_or_abnormal`
-- ROC-AUC and Average Precision when scores are available
-- absolute and normalized confusion matrices
+Ver `reports/model_b/MODEL_B_APP_USAGE.md`.
 
-For scored models, thresholds are selected on train only:
+## Correr desde VS Code
 
-- default score threshold
-- Youden J
-- max F1 for the abnormal class
+El repo incluye `.vscode/launch.json` con:
 
-The persisted best pipeline is selected by highest mean CV balanced accuracy, not by test performance.
+- `Model B - Audit`
+- `Model B - Build dataset`
+- `Model B - Train DEBUG`
+- `Model B - Train FULL light`
+- `Model B - Evaluate reports`
+- `Model B - Tests`
+
+Abre Run and Debug en VS Code y elige la configuracion.
+
+## Outputs
+
+Codigo fuente:
+
+```bash
+model_b_pipeline/
+.vscode/launch.json
+```
+
+Reportes versionables:
+
+```bash
+reports/model_b/MODEL_B_REPORT.md
+reports/model_b/NEXT_STEPS_MODEL_B.md
+reports/model_b/MODEL_B_APP_USAGE.md
+reports/model_b/figures/
+```
+
+Outputs generados e ignorados por `.gitignore`:
+
+```bash
+data/processed/model_b_dataset.parquet
+reports/model_b/tables/*.csv
+models/model_b/*
+```
 
 ## Tests
 
@@ -138,8 +191,6 @@ The persisted best pipeline is selected by highest mean CV balanced accuracy, no
 pytest model_b_pipeline/tests_model_b.py
 ```
 
-The tests cover feature safety, split behavior, preprocessing, metrics, and debug output generation on synthetic data.
+## Advertencia de Uso Clinico
 
-## Clinical Use Warning
-
-This is a research pipeline for model development and auditing. It is not validated for clinical decision-making and must not be used as a clinical device or diagnostic tool.
+Este flujo es de investigacion y auditoria. No esta validado para decisiones clinicas ni debe usarse como dispositivo diagnostico.

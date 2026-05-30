@@ -30,6 +30,7 @@ NEGATIVE_CLASS = "normal_sinus"
 CLASS_LABELS = [NEGATIVE_CLASS, POSITIVE_CLASS]
 
 RANDOM_STATE = 42
+MODEL_B_PIPELINE_VERSION = "1.1.0"
 
 FEATURES_MODEL_B = [
     # RR y temporales
@@ -62,6 +63,12 @@ FEATURES_MODEL_B = [
     "preop_k",
     "preop_gluc",
     "preop_cr",
+]
+
+CATEGORICAL_FEATURES_MODEL_B = ["sex"]
+NUMERIC_FEATURES_MODEL_B = [
+    feature for feature in FEATURES_MODEL_B
+    if feature not in CATEGORICAL_FEATURES_MODEL_B
 ]
 
 FORBIDDEN_COLUMNS_MODEL_B = {

@@ -1,0 +1,65 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Model B - Audit",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/model_b_pipeline/audit_model_b_dataset.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Model B - Build dataset",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/model_b_pipeline/build_model_b_dataset.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Model B - Train DEBUG",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/model_b_pipeline/train_model_b.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": ["--debug"]
+    },
+    {
+      "name": "Model B - Train FULL light",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/model_b_pipeline/train_model_b.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--n-iter",
+        "20",
+        "--n-splits",
+        "5",
+        "--models",
+        "logreg_balanced",
+        "sgd_log_loss",
+        "hist_gradient_boosting"
+      ]
+    },
+    {
+      "name": "Model B - Evaluate reports",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/model_b_pipeline/evaluate_model_b.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Model B - Tests",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": ["model_b_pipeline/tests_model_b.py"]
+    }
+  ]
+}

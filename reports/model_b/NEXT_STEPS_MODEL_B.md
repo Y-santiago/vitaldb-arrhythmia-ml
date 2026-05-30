@@ -1,13 +1,16 @@
 # Next Steps - Model B
 
-## Que se creo
+## Que se creo o actualizo
 
-- Carpeta independiente `model_b_pipeline/` con configuracion, auditoria, builder, entrenamiento, evaluacion, utilidades y tests.
-- Dataset reducido local `data/processed/model_b_dataset.parquet` con `case_id`, `rhythm_binary` y las 25 features de Modelo B.
-- Reportes locales en `reports/model_b/`.
-- Artefactos locales en `models/model_b/`: pipeline `.joblib`, columnas y metadata.
+- Registro explicito de modelos en `build_model_b_registry()`.
+- Busqueda de hiperparametros por modelo con `RandomizedSearchCV`.
+- Seleccion del ganador por CV en train, usando `balanced_accuracy`.
+- Evaluacion de test una sola vez para el ganador.
+- Artefactos para app en `models/model_b/`.
+- Utilidad de inferencia en `model_b_pipeline/predict_model_b.py`.
+- Configuraciones de VS Code en `.vscode/launch.json`.
 
-## Scripts para correr
+## Como correr desde cero
 
 ```bash
 python model_b_pipeline/audit_model_b_dataset.py
@@ -16,32 +19,44 @@ python model_b_pipeline/train_model_b.py --debug
 python model_b_pipeline/evaluate_model_b.py
 ```
 
-Corrida full inicial:
+## Como correr desde VS Code
 
-```bash
-python model_b_pipeline/train_model_b.py --n-iter 20 --n-splits 5
-python model_b_pipeline/evaluate_model_b.py
-```
+Abrir Run and Debug y elegir:
 
-## Resultados de esta corrida
+1. `Model B - Audit`
+2. `Model B - Build dataset`
+3. `Model B - Train DEBUG`
+4. `Model B - Evaluate reports`
+
+Para una corrida mas seria, usar `Model B - Train FULL light`.
+
+## Resultado de esta corrida
 
 - Debug: `True`
+- Modelos exitosos: `sgd_log_loss, logreg_balanced, hist_gradient_boosting, dummy_most_frequent`
 - Modelo ganador por CV: `sgd_log_loss`
-- Balanced accuracy test final: `0.8872`
-- Sensitivity anormal: `0.9130`
-- Specificity normal: `0.8613`
-- F1 anormal: `0.9100`
+- Balanced accuracy test final: `0.8882`
+- Sensitivity anormal: `0.9137`
+- Specificity normal: `0.8627`
+- F1 anormal: `0.9108`
 
-## Que fallo
+## Artefactos para app
 
-Si este archivo existe, `evaluate_model_b.py` pudo leer la metadata de entrenamiento. Revisar la salida de consola o los tests si alguna tabla/figura esperada falta.
+- `models/model_b/model_b_best_pipeline.joblib`
+- `models/model_b/model_b_feature_columns.json`
+- `models/model_b/model_b_metadata.json`
+- `models/model_b/model_b_threshold.json`
 
 ## Que falta
 
-- Correr full run si esta corrida fue debug.
-- Revisar si el umbral Youden J es operativo o si conviene fijar sensibilidad minima.
-- Comparar Modelo B contra el modelo amplio anterior con el mismo split si se necesita una conclusion metodologica fuerte.
+- Ejecutar full run si esta corrida fue debug.
+- Revisar calibracion y estabilidad por subgrupo.
+- Decidir si el threshold `youden_j_train` es adecuado para el objetivo operativo o si se requiere sensibilidad minima.
 
-## Recomendacion para la siguiente iteracion
+## Si algo falla
 
-Mantener Modelo B como baseline interpretable de 25 variables. La siguiente mejora deberia enfocarse en validacion y calibracion, no en agregar variables de leakage o intraoperatorias al modelo principal.
+Revisar:
+
+- `reports/model_b/tables/model_b_model_failures.csv`
+- `reports/model_b/tables/model_b_cv_results_all.csv`
+- salida de consola de `train_model_b.py`

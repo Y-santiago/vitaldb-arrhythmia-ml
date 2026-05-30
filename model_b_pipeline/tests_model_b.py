@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from model_b_pipeline import config_model_b as cfg
-from model_b_pipeline import evaluate_model_b, train_model_b
+from model_b_pipeline import evaluate_model_b, predict_model_b, train_model_b
 from model_b_pipeline.config_model_b import validate_model_b_feature_set
 from model_b_pipeline.utils_model_b import (
     compute_binary_metrics,
@@ -131,6 +131,90 @@ def test_metrics_compute_sensitivity_and_specificity_correctly():
     assert metrics["specificity_normal"] == pytest.approx(0.5)
 
 
+def test_build_model_b_registry_includes_expected_models_and_only_model_b_features():
+    registry = train_model_b.build_model_b_registry()
+    expected = {
+        "dummy_most_frequent",
+        "logreg_balanced",
+        "sgd_log_loss",
+        "hist_gradient_boosting",
+    }
+    assert expected.issubset(registry)
+    assert "random_forest_balanced" not in registry
+    assert "xgboost_binary" not in registry
+    for spec in registry.values():
+        assert spec["feature_columns"] == cfg.FEATURES_MODEL_B
+
+
+def test_build_model_b_registry_adds_optional_models_only_when_requested():
+    registry = train_model_b.build_model_b_registry(
+        include_random_forest=True,
+        include_xgboost=True,
+    )
+    assert "random_forest_balanced" in registry
+    assert "xgboost_binary" in registry
+
+
+def test_models_argument_filters_space_and_comma_separated_models():
+    registry = train_model_b.build_model_b_registry()
+    selected = train_model_b.select_model_names(["logreg_balanced", "sgd_log_loss"], registry)
+    assert selected == ["logreg_balanced", "sgd_log_loss"]
+    selected = train_model_b.select_model_names(["logreg_balanced,sgd_log_loss"], registry)
+    assert selected == ["logreg_balanced", "sgd_log_loss"]
+    with pytest.raises(ValueError, match="Valid models"):
+        train_model_b.select_model_names(["unknown_model"], registry)
+
+
+def test_randomized_search_receives_groups(monkeypatch, tmp_path):
+    _, _, _ = _patch_output_paths(monkeypatch, tmp_path)
+    df = _synthetic_model_b_df(n_cases=12, rows_per_case=4)
+    df.to_parquet(cfg.MODEL_B_DATASET_PATH, index=False)
+    calls = []
+
+    class FakeEstimator:
+        classes_ = np.asarray(cfg.CLASS_LABELS, dtype=object)
+
+        def predict(self, X):
+            return np.asarray([cfg.NEGATIVE_CLASS] * len(X), dtype=object)
+
+        def predict_proba(self, X):
+            return np.column_stack([
+                np.full(len(X), 0.7),
+                np.full(len(X), 0.3),
+            ])
+
+    class FakeSearch:
+        def __init__(self, estimator, param_distributions, n_iter, scoring, refit, cv,
+                     random_state, n_jobs, return_train_score, error_score):
+            self.best_estimator_ = FakeEstimator()
+            self.best_params_ = {"clf__strategy": "most_frequent"}
+            self.best_index_ = 0
+            self.best_score_ = 0.5
+            self.cv_results_ = {
+                "params": [{"clf__strategy": "most_frequent"}],
+                "mean_test_balanced_accuracy": np.asarray([0.5]),
+                "std_test_balanced_accuracy": np.asarray([0.0]),
+                "mean_test_accuracy": np.asarray([0.5]),
+                "std_test_accuracy": np.asarray([0.0]),
+            }
+
+        def fit(self, X, y, groups=None, **fit_params):
+            calls.append(groups)
+            return self
+
+    monkeypatch.setattr(train_model_b, "RandomizedSearchCV", FakeSearch)
+    args = train_model_b.parse_args([
+        "--debug",
+        "--models",
+        "dummy_most_frequent",
+        "--no-save-model",
+    ])
+    train_model_b.run_training(args)
+    assert calls
+    assert calls[0] is not None
+    assert len(calls[0]) > 0
+
+
 def test_debug_mode_generates_expected_outputs(monkeypatch, tmp_path):
     _, reports, models = _patch_output_paths(monkeypatch, tmp_path)
     df = _synthetic_model_b_df(n_cases=12, rows_per_case=5)
@@ -151,6 +235,7 @@ def test_debug_mode_generates_expected_outputs(monkeypatch, tmp_path):
         reports / "tables" / "model_b_train_test_split_summary.csv",
         reports / "tables" / "model_b_class_support_train_test.csv",
         reports / "tables" / "model_b_case_overlap_check.csv",
+        reports / "tables" / "model_b_cv_results_all.csv",
         reports / "tables" / "model_b_model_comparison_cv.csv",
         reports / "tables" / "model_b_model_comparison_test.csv",
         reports / "tables" / "model_b_best_hyperparameters.csv",
@@ -158,15 +243,43 @@ def test_debug_mode_generates_expected_outputs(monkeypatch, tmp_path):
         reports / "tables" / "model_b_confusion_matrix_absolute.csv",
         reports / "tables" / "model_b_confusion_matrix_normalized.csv",
         reports / "tables" / "model_b_threshold_analysis.csv",
+        reports / "tables" / "model_b_model_failures.csv",
         reports / "figures" / "model_b_confusion_matrix_absolute.png",
         reports / "figures" / "model_b_confusion_matrix_normalized.png",
         reports / "figures" / "model_b_roc_curve_best_model.png",
         reports / "figures" / "model_b_precision_recall_curve_best_model.png",
         reports / "MODEL_B_REPORT.md",
         reports / "NEXT_STEPS_MODEL_B.md",
+        reports / "MODEL_B_APP_USAGE.md",
         models / "model_b_best_pipeline.joblib",
         models / "model_b_feature_columns.json",
         models / "model_b_metadata.json",
+        models / "model_b_threshold.json",
     ]
     missing = [path for path in expected_paths if not path.exists()]
     assert missing == []
+
+    pred = predict_model_b.predict_model_b_dataframe(df, models_dir=models)
+    assert {
+        "model_b_score_arrhythmia_or_abnormal",
+        "model_b_prediction",
+        "model_b_prediction_default_threshold",
+        "model_b_threshold_used",
+        "model_b_threshold_method",
+    }.issubset(pred.columns)
+
+
+def test_predict_model_b_dataframe_fails_with_clear_missing_columns(monkeypatch, tmp_path):
+    _, _, models = _patch_output_paths(monkeypatch, tmp_path)
+    df = _synthetic_model_b_df(n_cases=12, rows_per_case=5)
+    df.to_parquet(cfg.MODEL_B_DATASET_PATH, index=False)
+    train_model_b.main([
+        "--debug",
+        "--models",
+        "dummy_most_frequent,logreg_balanced",
+        "--n-jobs",
+        "1",
+    ])
+    bad_df = df.drop(columns=["rr_prev"])
+    with pytest.raises(ValueError, match="missing Model B required columns"):
+        predict_model_b.predict_model_b_dataframe(bad_df, models_dir=models)
