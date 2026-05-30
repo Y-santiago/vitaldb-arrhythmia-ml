@@ -5,10 +5,16 @@ Este reporte se actualiza con los CSVs reales que produce
 casos del debug y NO al dataset completo.
 -->
 
-# Informe de modelado tabular — VitalDB Arrhythmia ML
+# Informe de modelado tabular MULTICLASE — VitalDB Arrhythmia ML
 
 **Fecha del reporte:** 2026-05-27
 **Rama:** `main`
+
+> **Nota (2026-05-29).** Esta iteración multiclase quedó **pausada**
+> tras la pivot a clasificación **binaria**
+> (`normal_sinus` vs `arrhythmia_or_abnormal`). El reporte del flujo
+> activo es `reports/BINARY_RHYTHM_MODELING_REPORT.md`. El presente
+> documento se conserva como referencia histórica.
 
 ---
 

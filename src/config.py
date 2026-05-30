@@ -122,3 +122,73 @@ TABULAR_OHE_MIN_FREQUENCY: int = 50
 
 # Nombre del parquet de salida del flujo tabular.
 TABULAR_DATASET_FILENAME: str = "filtered_tabular_modeling_dataset.parquet"
+
+# ---------------------------------------------------------------------------
+# Modelado binario: normal_sinus vs arrhythmia_or_abnormal
+# ---------------------------------------------------------------------------
+BINARY_TARGET_COLUMN: str = "rhythm_binary"
+BINARY_POSITIVE_CLASS: str = "arrhythmia_or_abnormal"
+BINARY_NEGATIVE_CLASS: str = "normal_sinus"
+
+# Mapeo declarativo `rhythm_label` -> clase binaria. Etiquetas no listadas
+# aquí se excluyen explícitamente del dataset binario (con motivo registrado
+# en el audit). NO se asignan automáticamente: cualquier etiqueta nueva debe
+# decidirse manualmente.
+BINARY_LABEL_MAPPING: dict[str, str] = {
+    "N": BINARY_NEGATIVE_CLASS,
+    "AFIB/AFL": BINARY_POSITIVE_CLASS,
+    "AVB": BINARY_POSITIVE_CLASS,
+    "Patterned Atrial Ectopy": BINARY_POSITIVE_CLASS,
+    "Patterned Ventricular Ectopy": BINARY_POSITIVE_CLASS,
+    "SND": BINARY_POSITIVE_CLASS,
+    "SVTA": BINARY_POSITIVE_CLASS,
+    "VT": BINARY_POSITIVE_CLASS,
+    "WAP/MAT": BINARY_POSITIVE_CLASS,
+}
+
+# Etiquetas que se excluyen explícitamente de la tarea binaria, con motivo.
+BINARY_EXCLUDED_LABELS: dict[str, str] = {
+    "Noise": "ruido/artefacto, no es una clase clínica interpretable",
+    "Unclassifiable": "no es interpretable como ritmo clínico para tarea binaria",
+}
+
+# Columnas que NUNCA pueden entrar al set de predictores en la tarea binaria.
+# Replica TABULAR_LEAKAGE_COLUMNS y suma `rhythm_binary` para evitar que el
+# target binario se cuele si fue persistido en el parquet.
+BINARY_LEAKAGE_COLUMNS: tuple[str, ...] = TABULAR_LEAKAGE_COLUMNS + (
+    BINARY_TARGET_COLUMN,
+)
+
+# Nombre del parquet de salida del flujo binario.
+BINARY_DATASET_FILENAME: str = "binary_rhythm_modeling_dataset.parquet"
+
+
+def map_rhythm_label_to_binary(rhythm_label: object) -> str | None:
+    """Mapea una etiqueta multiclase a la etiqueta binaria.
+
+    Reglas:
+        * ``N``                                -> ``normal_sinus``
+        * etiquetas en :data:`BINARY_LABEL_MAPPING` -> ``arrhythmia_or_abnormal``
+        * ``Noise`` / ``Unclassifiable``        -> ``None`` (excluir)
+        * valores nulos, vacíos, ``"nan"``, ``"none"`` -> ``None`` (excluir)
+        * cualquier otra etiqueta NO contemplada -> ``None`` (excluir y
+          registrar en el audit; NO se asigna automáticamente).
+
+    Devuelve ``None`` cuando la fila debe excluirse del dataset binario.
+    """
+    if rhythm_label is None:
+        return None
+    # `pd.isna` cubre NaN flotante; aquí evitamos importar pandas para no
+    # encadenar dependencias innecesarias dentro de `config`.
+    try:
+        if rhythm_label != rhythm_label:  # NaN check (NaN != NaN)
+            return None
+    except Exception:
+        pass
+
+    text = str(rhythm_label).strip()
+    if not text or text.lower() in {"nan", "none", "null"}:
+        return None
+    if text in BINARY_EXCLUDED_LABELS:
+        return None
+    return BINARY_LABEL_MAPPING.get(text)

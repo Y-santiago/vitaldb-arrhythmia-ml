@@ -1,8 +1,9 @@
 # Estado del proyecto y siguiente instrucción (handoff)
 
-**Fecha:** 2026-05-27
-**Rama:** `main`
-**Iteración actual:** pivot a modelado tabular (sin ECG crudo).
+**Fecha:** 2026-05-29
+**Rama actual:** `binary-normal-vs-arrhythmia` (no fusionada a `main`)
+**Iteración:** clasificación binaria `normal_sinus` vs
+`arrhythmia_or_abnormal`.
 
 Documento dirigido a que ChatGPT revise el estado real y dé la siguiente
 instrucción técnica sin tener que adivinar nada.
@@ -11,249 +12,217 @@ instrucción técnica sin tener que adivinar nada.
 
 ## 1. Estado exacto del repositorio
 
-### 1.1 Flujo activo (tabular)
-- `scripts/01_audit_filtered_tabular_dataset.py` — audita anotaciones +
-  metadata y produce 5 CSVs descriptivos en `reports/tables/`.
-- `scripts/02_build_filtered_tabular_modeling_dataset.py` — construye
-  `data/processed/filtered_tabular_modeling_dataset.parquet` (639 460
-  filas × 85 columnas, 482 cases, 10 clases).
-- `scripts/03_run_tabular_hyperparameter_search.py` — CLI de
-  `RandomizedSearchCV` multi-modelo con CV por grupo. Genera todos los
-  CSVs/PNGs requeridos.
-- `src/preprocessing.py::build_tabular_preprocessor` — `ColumnTransformer`
-  con imputación + escalado para numéricas y imputación + OHE con
-  `handle_unknown="ignore"` para categóricas.
-- `src/modeling.py::make_train_test_group_split_with_coverage` — split
-  80/20 por `case_id` con búsqueda de cobertura de clases.
-- `src/tabular_search.py` — orquestación: `classify_features`,
-  `build_pipeline_for_model`, `MODEL_PARAM_DISTRIBUTIONS`,
-  `run_search_for_model`, `evaluate_on_test`, `extract_feature_importance`.
-- `notebooks/06_tabular_modeling_hyperparameter_search.ipynb` — wrapper
-  interactivo del mismo flujo.
+### 1.1 Flujo activo de esta iteración (binario)
+- `scripts/04_audit_binary_rhythm_dataset.py` — audita el dataset
+  binario y genera 9 CSVs + 3 figuras descriptivas en `reports/`.
+- `scripts/05_build_binary_rhythm_modeling_dataset.py` — construye
+  `data/processed/binary_rhythm_modeling_dataset.parquet` con el target
+  binario y nuevas features RR rolling por caso.
+- `scripts/06_run_binary_rhythm_model_search.py` — CLI de
+  `RandomizedSearchCV` multi-modelo con CV por grupo, threshold tuning
+  por Youden J (en train) y persistencia de todos los outputs.
+- `src/binary_search.py` — `build_binary_model_registry`,
+  `classify_binary_features`,
+  `make_binary_group_train_test_split_with_coverage`,
+  `run_binary_search_for_model`, `_XGBBinaryClassifierSafe`,
+  selectores de threshold (`select_threshold_youden_j`,
+  `select_threshold_max_f1`).
+- `src/config.py` — constantes binarias:
+  `BINARY_TARGET_COLUMN`, `BINARY_POSITIVE_CLASS`,
+  `BINARY_NEGATIVE_CLASS`, `BINARY_LABEL_MAPPING`,
+  `BINARY_EXCLUDED_LABELS`, `BINARY_LEAKAGE_COLUMNS`,
+  `BINARY_DATASET_FILENAME` y la función
+  `map_rhythm_label_to_binary`.
+- `tests/test_binary_search.py` — 32 tests nuevos.
+- `reports/BINARY_RHYTHM_MODELING_REPORT.md` — informe técnico.
 
-### 1.2 Línea legacy (ECG crudo) — pausada
-Marcados con banner `[LEGACY — ...]` en su docstring:
-- `scripts/01_download_all_available_ecg.py`
-- `scripts/02_build_features_all_windows.py`
-- `scripts/03_run_hyperparameter_search.py`
-- `src/search.py`
-- Notebooks `03`, `04`, `05`, `06_full_modeling_hyperparameter_search.ipynb`
-- `reports/MODELING_REPORT.md` (informe de la corrida ECG previa)
+### 1.2 Iteraciones anteriores (NO se reactivan en esta fase)
+- **Tabular multiclase** (iteración previa): `src/tabular_search.py`,
+  `scripts/01_audit_filtered_tabular_dataset.py`,
+  `scripts/02_build_filtered_tabular_modeling_dataset.py`,
+  `scripts/03_run_tabular_hyperparameter_search.py`,
+  `notebooks/06_tabular_modeling_hyperparameter_search.ipynb`,
+  `reports/TABULAR_MODELING_REPORT.md`. La construcción del dataset
+  tabular base se reutiliza desde la iteración binaria.
+- **ECG crudo** (legacy): `src/search.py`, `src/download.py`,
+  `src/windowing.py`, scripts y notebooks 03–05 con banner `[LEGACY]`.
 
-NO se ha eliminado nada de este flujo: queda como referencia histórica.
-
-### 1.3 Datos en disco (no versionados)
+### 1.3 Datos en disco (no versionados, salvo modelos joblib)
 - `data/raw/physionet_annotations/Annotation_Files/` — 482 archivos.
-- `data/raw/physionet_annotations/metadata.csv` — 482 × 79.
-- `data/raw/vitaldb_waveforms/` — 3 `.npy` legacy (case_1001, case_1002,
-  case_1018). No se usan en la fase tabular.
-- `data/processed/filtered_tabular_modeling_dataset.parquet` — 639 460 ×
-  85, generado por `scripts/02_build_filtered_tabular_modeling_dataset.py`.
+- `data/processed/filtered_tabular_modeling_dataset.parquet` —
+  639 460 × 85, base del flujo tabular.
+- `data/processed/binary_rhythm_modeling_dataset.parquet` —
+  639 401 × 101 (16 features RR rolling nuevas).
+- `models/*.joblib`, `models/feature_columns.json`,
+  `models/model_artifacts_metadata.json` — versionados con excepción
+  declarada en `.gitignore` para que la app Streamlit los consuma.
 
 ---
 
 ## 2. Archivos nuevos en esta iteración
 
-### Nuevos
-- `scripts/01_audit_filtered_tabular_dataset.py`
-- `scripts/02_build_filtered_tabular_modeling_dataset.py`
-- `scripts/03_run_tabular_hyperparameter_search.py`
-- `src/tabular_search.py`
-- `notebooks/06_tabular_modeling_hyperparameter_search.ipynb`
-- `tests/test_tabular_search.py`
-- `reports/TABULAR_MODELING_REPORT.md`
-- `reports/NEXT_STEPS_FOR_CHATGPT.md` (este archivo)
-
-### Modificados
-- `src/config.py` — añade `TABULAR_LEAKAGE_COLUMNS`,
-  `TABULAR_MAX_CATEGORY_CARDINALITY`, `TABULAR_OHE_MIN_FREQUENCY`,
-  `TABULAR_DATASET_FILENAME`.
-- `src/preprocessing.py` — añade `build_tabular_preprocessor`.
-- `src/search.py` — banner `[LEGACY]`.
-- `scripts/01_download_all_available_ecg.py` — banner `[LEGACY]`.
-- `scripts/02_build_features_all_windows.py` — banner `[LEGACY]`.
-- `scripts/03_run_hyperparameter_search.py` — banner `[LEGACY]`.
-- `README.md` — pivot metodológico, estructura actualizada, flujo
-  recomendado tabular.
+| Path | Tipo |
+|---|---|
+| `src/binary_search.py` | nuevo |
+| `scripts/04_audit_binary_rhythm_dataset.py` | nuevo |
+| `scripts/05_build_binary_rhythm_modeling_dataset.py` | nuevo |
+| `scripts/06_run_binary_rhythm_model_search.py` | nuevo |
+| `tests/test_binary_search.py` | nuevo |
+| `reports/BINARY_RHYTHM_MODELING_REPORT.md` | nuevo |
+| `reports/NEXT_STEPS_FOR_CHATGPT.md` | reescrito para esta iteración |
+| `reports/PROJECT_REPORT.md` | actualizado con sección 13 (binario) |
+| `README.md` | actualizado con flujo binario |
+| `src/config.py` | constantes y mapper binarios |
 
 ---
 
 ## 3. Comandos ejecutados (reproducibilidad)
 
 ```bash
-# Tests (deben pasar)
-python -m pytest tests/
+# 0. Tests
+python -m pytest tests/ -q
 
-# Pipeline tabular:
-python scripts/01_audit_filtered_tabular_dataset.py
-python scripts/02_build_filtered_tabular_modeling_dataset.py
+# 1. Audit
+python scripts/04_audit_binary_rhythm_dataset.py
 
-# Búsqueda de hiperparámetros — debug (≈ 5-10 min):
-python scripts/03_run_tabular_hyperparameter_search.py --debug
+# 2. Build
+python scripts/05_build_binary_rhythm_modeling_dataset.py
 
-# Full run (puede tardar horas con n_iter=30 y los 6 modelos):
-python scripts/03_run_tabular_hyperparameter_search.py --n-iter 30 --n-splits 5
+# 3. Búsqueda
+python scripts/06_run_binary_rhythm_model_search.py --debug
+# o full run:
+python scripts/06_run_binary_rhythm_model_search.py --n-iter 30 --n-splits 5
 ```
 
 ---
 
-## 4. Resultados principales
+## 4. Resultados principales — corrida `--debug` (80 cases)
 
-### 4.1 Auditoría del dataset (reproducible y firme)
-Fuente: `reports/tables/tabular_dataset_audit.csv`.
+`max_cases=80, n_iter=3, n_splits=2, n_jobs=-1`.
+Split: 64 cases train (82 541 filas) / 16 cases test (22 972 filas).
+Fuente: `reports/tables/binary_hyperparameter_search_meta.json`,
+`reports/tables/binary_model_comparison_test.csv`.
 
-| métrica | valor |
-|---|---:|
-| filas antes filtros | 676 250 |
-| filas después filtros | 639 460 |
-| cases (antes y después) | 482 |
-| clases `rhythm_label` | 10 |
-| features numéricas candidatas | 54 |
-| features categóricas candidatas | 17 |
+| modelo | test_balanced_acc | test_f1_abn | sens (recall) | spec | ROC-AUC | AP | fit (s) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| dummy_most_frequent | 0.500 | 0.000 | 0.000 | 1.000 | 0.500 | 0.597 | 7.9 |
+| **logreg_balanced** | **0.906** | **0.922** | **0.914** | **0.898** | **0.956** | **0.964** | 15.7 |
+| sgd_log_loss | 0.891 | 0.912 | 0.909 | 0.873 | 0.950 | 0.951 | 9.5 |
+| linear_svc_balanced | 0.500* | 0.748 | 1.000 | 0.000 | 0.053 | 0.394 | 16.7 |
+| hist_gradient_boosting | 0.862 | 0.899 | 0.931 | 0.793 | 0.937 | 0.949 | 31.4 |
+| random_forest_balanced | 0.871 | 0.903 | 0.925 | 0.817 | 0.945 | 0.966 | 53.2 |
+| extra_trees_balanced | 0.883 | 0.911 | 0.928 | 0.838 | 0.936 | 0.939 | 444 |
+| balanced_random_forest | 0.867 | 0.898 | 0.916 | 0.817 | 0.925 | 0.955 | 240 |
+| easy_ensemble | **error** | — | — | — | — | — | — |
+| xgboost_binary | 0.500* | 0.748 | 1.000 | 0.000 | 0.936 | 0.949 | 74 |
 
-Clases dominantes: `N` (61 %), `AFIB/AFL` (25 %). Minoritarias críticas:
-`AVB` (10 cases), `Unclassifiable` (5 cases).
+(*) Umbral Youden J colapsado (predijo todo positivo). ROC-AUC alto
+indica que la discriminación intrínseca es buena; el problema es la
+calibración del threshold. Posible fix: `CalibratedClassifierCV`.
 
-### 4.2 Split (sobre dataset completo, `random_state=42`)
-- `chosen_seed=42`, 10/10 clases cubiertas en train y test.
-- `train`: 385 cases / 510 287 filas.
-- `test`: 97 cases / 129 173 filas.
-- `actual_test_fraction = 0.202`.
+**Ganador (debug):** `logreg_balanced` con `clf__C ≈ 0.0746` y
+`class_weight='balanced'`. test_balanced_accuracy = 0.906, ROC-AUC =
+0.956, AP = 0.964. Matriz de confusión: TN=8 319, FP=941, FN=1 184,
+TP=12 528.
 
-### 4.3 Modelos — corrida `--debug` ejecutada (60 cases, n_iter=3, n_splits=2)
+`easy_ensemble` falló por `numpy._core._exceptions._ArrayMemoryError`
+en un `cross_val_predict` interno. Documentado en el reporte; reducir
+`n_estimators` o eliminarlo para el full run.
 
-Resultados reales del run documentado en
-`reports/tables/tabular_hyperparameter_search_meta.json`:
-
-| modelo | test_f1_macro | test_bal_acc | test_accuracy | fit_seconds |
-|---|---:|---:|---:|---:|
-| logreg | 0.151 | 0.272 | 0.412 | 82.8 |
-| decision_tree | 0.078 | 0.112 | 0.166 | 12.9 |
-| random_forest | 0.144 | 0.157 | 0.566 | 57.7 |
-| xgboost | 0.085 | 0.113 | 0.560 | 97.4 |
-| **linear_svc** | **0.189** | **0.356** | 0.354 | 149.6 |
-| mlp | 0.126 | 0.126 | 0.344 | 83.7 |
-
-Total wall-clock: ~9 minutos.
-
-### 4.4 Mejor modelo (debug)
-`linear_svc` con `clf__C ≈ 56.7` y `class_weight="balanced"`.
-
-Por clase en test (debug, 16 085 filas en test):
-
-| clase | precision | recall | f1 | support |
-|---|---:|---:|---:|---:|
-| AFIB/AFL | 0.405 | 0.843 | 0.547 | 4 070 |
-| SND | 0.445 | 0.999 | 0.616 | 699 |
-| N | 0.665 | 0.141 | 0.233 | 9 075 |
-| Patterned Ventricular Ectopy | 0.371 | 0.211 | 0.269 | 1 295 |
-| AVB, Patterned Atrial Ectopy, WAP/MAT | 0 | 0 | 0 | 465+362+15 |
-| SVTA | 0.006 | 1.000 | 0.012 | 19 |
-| VT | 1.000 | 0.012 | 0.023 | 85 |
-
-Detalle completo en `reports/tables/tabular_best_model_classification_report.csv` y
-`reports/tables/tabular_confusion_matrix_absolute.csv`. La matriz
-muestra que LinearSVC con `class_weight="balanced"` está sobre-prediciendo
-SVTA, sacrificando precision a cambio de recall.
+Las cifras **no son** las del full run sobre los 482 cases. Para
+reproducir el ganador final, correr sin `--debug`.
 
 ---
 
-## 5. Problemas encontrados y soluciones aplicadas
+## 5. Problemas encontrados y soluciones
 
-| Problema | Causa raíz | Solución |
+| Problema | Causa | Solución |
 |---|---|---|
-| `caseid` (97 % NaN) en el merge | Un archivo (Annotation_file_2453) tiene la columna `caseid` en lugar de `bad_signal_quality_label`. | Añadido a `TABULAR_LEAKAGE_COLUMNS`. |
-| `age` venía como string | Algunas filas usan `>89` para anonimización. | Coerción `>89 → 89` en `02_build_*`. |
-| XGBoost ≥ 2.0 rechaza folds con clases no consecutivas | `LabelEncoder` global crea gaps cuando un fold pierde clases. | Wrapper `_XGBClassifierSafe` (re-encoding por fit). |
-| MLP + early stopping crashea con etiquetas string | `np.isnan(y_pred)` sobre strings. | `early_stopping=False`. |
-| Constantes ocultas tras filtros (`bad_signal_quality`, `caseid`, `casestart`, `airway`) | Tras aplicar filtros una columna puede quedar con un único valor. | Drop automático en `02_build_*` y detección en `classify_features`. |
-| Debug `n_jobs=1` demasiado lento | Modelos RF/MLP no paralelos. | `n_jobs=-1` también en debug. |
+| sklearn falla con `pos_label=1` cuando las etiquetas son strings y se usa scoring genérico `f1`/`precision`/`recall`. | Scorers genéricos asumen pos_label=1. | `BINARY_SCORING_METRICS` usa `make_scorer(..., pos_label=BINARY_POSITIVE_CLASS)`. |
+| `roc_auc` y `average_precision` no son uniformes vía `make_scorer` con strings + distintos response_methods. | Algunos modelos no exponen `predict_proba`. | Se computan **solo en test** sobre `decision_function` o `predict_proba` directamente. |
+| `LinearSVC` produjo umbral Youden J que colapsó las predicciones de test a una sola clase. | `decision_function` poco calibrado; el umbral de train no generalizó. | Documentado. `chosen_threshold` y `threshold_method` se registran por modelo. Posible mejora: `CalibratedClassifierCV`. |
+| XGBoost ≥ 2.0 con etiquetas string + multiclase ya tenía wrapper; para binario se replica como `_XGBBinaryClassifierSafe` con mapeo explícito ne → 0, pos → 1 y `scale_pos_weight = n_neg/n_pos` calculado en `fit`. | XGB binario requiere y ∈ {0,1}. | Wrapper interno, transparente al pipeline. |
 
 ---
 
 ## 6. Preguntas técnicas pendientes
 
-1. **¿Aumentar `--n-iter` para full run, o ya es suficiente con 30?** Con 6
-   modelos × 30 iter × 5 folds = 900 fits sobre 510k filas, el costo es
-   significativo. ¿Vale 50? ¿100?
-2. **¿Encoding de `dx` / `opname`?** Hoy descartadas por alta cardinalidad.
-   ¿Probar target encoding por fold? ¿Embeddings de texto preentrenados
-   (off-scope clínico)?
-3. **¿Persistir el `best_estimator_` con `joblib`?** Hoy se vuelve a
-   ajustar en cada corrida; persistirlo aceleraría inferencia.
-4. **¿Manejo de desbalance más allá de `class_weight`?** ¿Probar
-   `imbalanced-learn` (SMOTE, BalancedRandomForest, BalancedBagging)?
-5. **¿Reintroducir el flujo ECG crudo como complemento?** Ahora que el
-   tabular está estable, ¿vale la pena reactivar las features ECG para
-   un ensemble?
-6. **¿Reportar varianza entre folds además del promedio?**
+1. **¿Calibrar probabilidades?** `CalibratedClassifierCV` sobre el mejor
+   modelo (especialmente LinearSVC/RF) puede estabilizar el umbral.
+2. **¿Tomar decisión a nivel de caso (agregando latidos)?** Hoy se mide
+   por latido. Reportar también la fracción anormal por caso podría ser
+   más clínicamente útil.
+3. **¿Probar `imblearn.Pipeline` con SMOTE dentro de CV?** Solo
+   recomendable después del full run para no esconder el efecto de
+   `class_weight`.
+4. **¿Persistir el mejor modelo binario en `models/`?** El `.gitignore`
+   ya permite versionar `.joblib` para Streamlit.
+5. **¿Fairness por sexo/edad?** Hay desbalances obvios en metadata; vale
+   medir si el modelo es uniformemente bueno.
 
 ---
 
 ## 7. Recomendación concreta para la siguiente instrucción
 
-**Path A — Full run sobre los 482 cases**
+### Path A — Full run + persistencia del mejor modelo
 
 ```
 Ejecuta:
-  python scripts/03_run_tabular_hyperparameter_search.py --n-iter 30 --n-splits 5
+  python scripts/06_run_binary_rhythm_model_search.py --n-iter 30 --n-splits 5
+Tiempo estimado: 1-3 horas con todos los modelos.
 
-Tiempo estimado: varias horas según hardware. Revisa al final
-reports/tables/tabular_model_comparison_test.csv y actualiza
-reports/TABULAR_MODELING_REPORT.md con las cifras del full run
-sustituyendo las del debug.
+Después, persiste el best_estimator del modelo ganador con
+joblib.dump en models/binary_best_pipeline.joblib y guarda
+models/binary_feature_columns.json con la lista de features. Actualiza
+BINARY_RHYTHM_MODELING_REPORT.md con las cifras del full run y registra
+en él el ganador final.
 ```
 
-**Path B — Mejora del feature engineering antes del full run**
+### Path B — Calibración + decisión a nivel de caso
 
 ```
-Añade a scripts/02_build_filtered_tabular_modeling_dataset.py:
-  * mean/std/rmssd de RR sobre ventana móvil de N latidos por caso
-    (con N parametrizable; default N=20)
-  * codificación numérica de `dx` / `opname` por target encoding
-    estimado SOLO en train tras el split externo (fit fuera del
-    pipeline interno para evitar fuga)
-Luego corre nuevamente la búsqueda en debug y full.
+Antes del full run, modifica scripts/06_run_binary_rhythm_model_search.py
+para envolver el mejor modelo en CalibratedClassifierCV (cv interno) y
+añadir una métrica agregada por case_id (fracción anormal por caso vs
+ground truth). Mide cuánto mejora el threshold tuning.
 ```
 
-**Path C — Persistir el modelo y construir un script de inferencia**
+### Path C — Fairness por subgrupo
 
 ```
-Tras el full run, persiste el mejor estimator con joblib.dump en
-models/best_tabular.joblib (ignorado por git). Crea un script
-scripts/04_predict_tabular.py que cargue ese modelo y prediga sobre
-un nuevo parquet con las mismas columnas.
+Crea scripts/07_binary_fairness_audit.py que tome el mejor modelo
+persistido en models/ y reporte test_balanced_accuracy, recall_abnormal
+y specificity_normal por sexo, por banda de edad (<40, 40-60, 60-80, >80),
+y por tipo de cirugía. Guarda los CSVs y figuras en reports/.
 ```
 
-### Mi recomendación inicial
-
-**Path A** primero (es la corrida limpia que esta iteración prometió y
-todavía no se ha hecho), seguido de **Path C** si Path A da un baseline
-razonable. **Path B** queda como mejora futura de feature engineering.
+**Mi recomendación:** **Path A**. Las cifras de debug ya muestran que la
+tarea es tratable (LogReg balanced_accuracy 0.906 en debug). El full run
+sobre 482 cases es lo que falta para confirmar la generalización.
 
 ---
 
-## Apéndice — Comandos de verificación
+## Apéndice — Verificación rápida
 
 ```bash
-# Tests
+# Tests (esperado: 116/116 OK)
 python -m pytest tests/ -q
 
-# Verificar que el dataset no contiene columnas prohibidas como features
+# Que no haya features prohibidas
 python -c "
 import pandas as pd
-from src.tabular_search import classify_features
-df = pd.read_parquet('data/processed/filtered_tabular_modeling_dataset.parquet')
-cls = classify_features(df)
-forbidden = {'beat_type','rhythm_label','case_id','rhythm_classes','bad_signal_quality','bad_signal_quality_label','subjectid','death_inhosp','icu_days','adm','dis'}
+from src.binary_search import classify_binary_features
+df = pd.read_parquet('data/processed/binary_rhythm_modeling_dataset.parquet')
+cls = classify_binary_features(df)
+forbidden = {'beat_type','rhythm_label','rhythm_binary','case_id','rhythm_classes','bad_signal_quality','bad_signal_quality_label'}
 for c in forbidden:
     assert c not in cls['numeric_features'] and c not in cls['categorical_features'], c
 print('OK: ninguna columna prohibida en features.')
 "
 
-# Inspeccionar resultados de la última corrida
+# Resumen del último run
 python -c "
 import pandas as pd
-print(pd.read_csv('reports/tables/tabular_model_comparison_test.csv').round(3).to_string(index=False))
+print(pd.read_csv('reports/tables/binary_model_comparison_test.csv').round(3).to_string(index=False))
 "
 ```

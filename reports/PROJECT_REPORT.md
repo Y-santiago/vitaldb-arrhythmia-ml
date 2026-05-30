@@ -501,3 +501,81 @@ Los notebooks `03-05` y `06_full_modeling_hyperparameter_search.ipynb`
 quedan disponibles para inspección histórica. Los `.npy` (case_1001,
 case_1002, case_1018) cacheados en `data/raw/vitaldb_waveforms/` no se
 usan en el flujo activo.
+
+---
+
+## 13. Iteración binaria (2026-05-29)
+
+Tercera fase de modelado: reformulación de la tarea como
+**clasificación binaria** `normal_sinus` vs `arrhythmia_or_abnormal`.
+Esta es la fase **activa** del proyecto. Las dos fases anteriores
+(multiclase tabular y ECG crudo) quedan disponibles como referencia.
+
+Rama: `binary-normal-vs-arrhythmia` (no fusionada a `main` aún).
+
+### 13.1 Justificación
+La iteración multiclase produjo `f1_macro` bajo por clases muy
+minoritarias (`Unclassifiable` 5 cases, `AVB` 10, `WAP/MAT` 25). La
+versión binaria:
+- mantiene relevancia clínica inicial (detectar si hay arritmia);
+- reduce la varianza de la métrica de selección;
+- mejora la cobertura por split (76 % de los cases son mixtos).
+
+### 13.2 Nuevos componentes
+
+| Path | Propósito |
+|---|---|
+| `src/binary_search.py` | Registro de 7+ modelos binarios (más opcionales si las dependencias están), CV builder, `_XGBBinaryClassifierSafe`, selectores de threshold. |
+| `scripts/04_audit_binary_rhythm_dataset.py` | Auditoría binaria con 9 CSVs + 3 figuras. |
+| `scripts/05_build_binary_rhythm_modeling_dataset.py` | Construye `binary_rhythm_modeling_dataset.parquet`; añade `rr_prev_rolling_mean_{5,10,20}`, `rr_prev_rolling_std_{5,10,20}`, `rr_rmssd_{5,10,20}`, `rr_pnn50_{5,10,20}`, `local_hr_mean_{5,10,20}` por caso. |
+| `scripts/06_run_binary_rhythm_model_search.py` | CLI de la búsqueda binaria con threshold tuning Youden J / F1 en train. |
+| `tests/test_binary_search.py` | 32 tests. |
+| `reports/BINARY_RHYTHM_MODELING_REPORT.md` | Informe técnico binario. |
+
+### 13.3 `config` actualizado
+`src/config.py` añade:
+- `BINARY_TARGET_COLUMN`, `BINARY_POSITIVE_CLASS`,
+  `BINARY_NEGATIVE_CLASS`.
+- `BINARY_LABEL_MAPPING` (9 etiquetas mapeadas explícitamente, no
+  asignación automática).
+- `BINARY_EXCLUDED_LABELS` (`Noise`, `Unclassifiable`).
+- `BINARY_LEAKAGE_COLUMNS` (TABULAR_LEAKAGE + `rhythm_binary`).
+- `BINARY_DATASET_FILENAME`.
+- Función `map_rhythm_label_to_binary(rhythm_label)`.
+
+### 13.4 Auditoría real
+- 639 460 → 639 401 filas tras el mapeo binario (59
+  `Unclassifiable` excluidas).
+- 482 cases, 0 perdidos.
+- Distribución por filas: 61.4 % `normal_sinus`, 38.6 %
+  `arrhythmia_or_abnormal`.
+- Composición por caso: 4 solo normales, 112 solo anormales, 366
+  mixtos (75.9 %).
+
+### 13.5 Resultados parciales — corrida `--debug` (80 cases)
+Fuente: `reports/tables/binary_model_comparison_test.csv` y
+`reports/tables/binary_hyperparameter_search_meta.json`
+(`max_cases=80, n_iter=3, n_splits=2`).
+
+Líderes en debug (`test_balanced_accuracy`):
+- `logreg_balanced`: **0.906**
+- `sgd_log_loss`: 0.891
+- `random_forest_balanced`: 0.871
+- `hist_gradient_boosting`: 0.862
+
+`linear_svc_balanced` reportó 0.5 en test por colapso del umbral
+Youden J seleccionado en train (documentado como limitación).
+
+Cifras finales requieren full run sin `--debug`. El JSON de meta
+documenta exactamente qué args se usaron.
+
+### 13.6 Tests
+- Suite total: 84 + 32 = **116 tests verdes**.
+
+### 13.7 Pendiente
+- Full run (`--n-iter 30 --n-splits 5` sin `--max-cases`).
+- Persistencia del mejor binario a `models/binary_best_pipeline.joblib`.
+- Calibración de probabilidades del ganador (CalibratedClassifierCV).
+- Eventual fairness por subgrupos.
+
+Ver `reports/NEXT_STEPS_FOR_CHATGPT.md` para los caminos sugeridos.
