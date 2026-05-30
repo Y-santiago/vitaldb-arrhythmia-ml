@@ -1,14 +1,19 @@
 # VitalDB Arrhythmia ML
 
-Proyecto académico y exploratorio de **clasificación multiclase de
-`rhythm_label`** usando datos **tabulares filtrados** de anotaciones y
-metadatos de la *VitalDB Arrhythmia Database 1.0.0* (PhysioNet).
+Proyecto académico y exploratorio de **clasificación binaria de ritmo
+cardíaco** (`normal_sinus` vs `arrhythmia_or_abnormal`) usando datos
+**tabulares filtrados** de anotaciones y metadatos de la *VitalDB
+Arrhythmia Database 1.0.0* (PhysioNet).
 
-> **Pivot metodológico (fase actual).** Esta iteración trabaja sobre datos
-> tabulares (anotaciones + metadata). El enfoque previo basado en señal
-> ECG cruda (descarga desde VitalDB + ventaneo de señal + features
-> temporales) queda como **línea exploratoria histórica** marcada como
-> `legacy` y no es el flujo principal de modelado.
+> **Fase activa (2026-05-29).** Clasificación binaria a partir de
+> metadata + features temporales locales por latido. Las dos fases
+> previas (multiclase tabular y ECG crudo) están preservadas pero **no
+> son el flujo principal**.
+
+> **Pivot metodológico previo.** Antes de esta iteración el proyecto era
+> multiclase tabular. Antes de esa, se exploró ECG crudo (descarga desde
+> VitalDB + ventaneo). Ambas líneas quedan como referencia histórica
+> marcadas como `legacy` en sus archivos.
 
 > **Advertencia académica.** Este proyecto tiene fines exclusivamente
 > educativos y de investigación exploratoria. **No constituye un
@@ -234,34 +239,48 @@ desde VitalDB queda como `legacy` (ver banner en
 
 ---
 
-## 8. Flujo de trabajo recomendado (fase tabular)
+## 8. Flujo de trabajo recomendado
 
-### 8.1 Pipeline activo (sin ECG crudo)
+### 8.1 Pipeline binario activo (sin ECG crudo)
 
 ```bash
-# 1. Auditar anotaciones + metadata
-python scripts/01_audit_filtered_tabular_dataset.py
+# 1. Auditar el dataset binario
+python scripts/04_audit_binary_rhythm_dataset.py
 
-# 2. Construir el dataset modelable
-python scripts/02_build_filtered_tabular_modeling_dataset.py
+# 2. Construir el parquet binario con features RR rolling
+python scripts/05_build_binary_rhythm_modeling_dataset.py
 
-# 3. Búsqueda de hiperparámetros multi-modelo
+# 3. Búsqueda de hiperparámetros binaria
 #    (debug rápido)
-python scripts/03_run_tabular_hyperparameter_search.py --debug
+python scripts/06_run_binary_rhythm_model_search.py --debug
 #    (full run)
+python scripts/06_run_binary_rhythm_model_search.py --n-iter 30 --n-splits 5
+```
+
+Outputs persistidos en `reports/tables/binary_*.csv` y
+`reports/figures/binary_*.png`. Reporte técnico:
+`reports/BINARY_RHYTHM_MODELING_REPORT.md`.
+
+### 8.2 Pipeline tabular multiclase (iteración previa)
+
+Conservado completo. Para regenerar:
+
+```bash
+python scripts/01_audit_filtered_tabular_dataset.py
+python scripts/02_build_filtered_tabular_modeling_dataset.py
 python scripts/03_run_tabular_hyperparameter_search.py --n-iter 30 --n-splits 5
 ```
 
-El notebook equivalente, con celdas inspeccionables, es
-`notebooks/06_tabular_modeling_hyperparameter_search.ipynb`.
+### 8.3 Línea exploratoria ECG crudo (legacy, NO usar en esta fase)
 
-### 8.2 Línea exploratoria (legacy, NO usar en esta fase)
-
-Los notebooks `01–05` y `06_full_modeling_hyperparameter_search.ipynb`,
-junto con `scripts/01_download_all_available_ecg.py`,
+Los notebooks `03_ecg_loading_and_visualization.ipynb`,
+`04_windowing_and_feature_engineering.ipynb`,
+`05_baseline_modeling.ipynb` y
+`06_full_modeling_hyperparameter_search.ipynb`, junto con
+`scripts/01_download_all_available_ecg.py`,
 `scripts/02_build_features_all_windows.py` y
-`scripts/03_run_hyperparameter_search.py`, son la línea exploratoria
-basada en ECG crudo. Quedan disponibles como referencia histórica.
+`scripts/03_run_hyperparameter_search.py`, conservan la línea
+exploratoria basada en ECG crudo.
 
 Toda transformación importante debe poder ejecutarse también vía los
 módulos de `src/` para mantener reproducibilidad fuera de los notebooks.
